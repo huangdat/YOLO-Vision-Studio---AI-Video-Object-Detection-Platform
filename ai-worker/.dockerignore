@@ -7,3 +7,17 @@ __pycache__/
 tests/
 requirements-dev.txt
 *.log
+model-cache/
+temp/
+outputs/
+downloads/
+inputs/
+runs/
+*.pt
+*.pth
+*.onnx
+*.mp4
+*.avi
+*.mkv
+*.webm
+*.mov

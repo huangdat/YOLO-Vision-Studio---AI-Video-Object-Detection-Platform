@@ -1,0 +1,8 @@
+# Optional inference dependencies. Install the CPU bootstrap first on CPU systems.
+-r requirements.txt
+torch==2.13.0
+torchvision==0.28.0
+ultralytics-opencv-headless==8.4.207
+opencv-python-headless==5.0.0.93
+numpy==2.3.5
+yt-dlp[default]==2026.10.26

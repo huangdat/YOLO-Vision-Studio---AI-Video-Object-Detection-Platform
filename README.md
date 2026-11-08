@@ -4,9 +4,11 @@
 
 A modular foundation for processing videos with YOLO models. Phase 1 provides a responsive dashboard, a Spring Boot API, a CPU-compatible Python service, and local infrastructure. The dashboard reports the actual backend connection state.
 
-Phase 02 adds the PostgreSQL schema, Flyway migrations, JPA entities, repositories, and response DTO foundations for model configurations, detection jobs, and result metadata. The initial `yolo26s` metadata remains disabled; no weights are installed. See the [database design and persistence testing guide](docs/database-design.md).
+Phase 02 adds the PostgreSQL schema, Flyway migrations, JPA entities, repositories, and response DTO foundations for model configurations, detection jobs, and result metadata. The initial `yolo26s` database metadata remains disabled. See the [database design and persistence testing guide](docs/database-design.md).
 
-Video detection, YouTube downloading, job execution, inference, statistics, authentication, and video transfer are reserved for later phases. The Detection, History, and Models pages are placeholders.
+Phase 03 adds an independent Python CLI/library for local video and authorized YouTube inputs, streaming YOLO26s inference, bounding-box annotations, cumulative detection statistics, progress callbacks, H.264 MP4 export, and JSON results. CPU inference is the default container setup; model weights load only after explicit processing or preparation. See the [AI engine guide](docs/ai-detection-engine.md) for optional dependency installation, FFmpeg setup, CLI commands, and the explicit real inference smoke test.
+
+The browser Detection, History, and Models pages remain placeholders. Model management, RabbitMQ execution, Spring Boot detection APIs, authentication, and object storage transfer belong to later phases.
 
 ## Project structure
 
@@ -32,10 +34,11 @@ Video detection, YouTube downloading, job execution, inference, statistics, auth
 | Frontend | React 19.3.1, TypeScript 7.0.2, Vite 8.3.6 |
 | UI and client | Tailwind CSS 4.3.5, Axios 1.21.0, React Router 7.18.5 |
 | AI worker | Python 3.11, FastAPI 0.162.2, Pydantic 2.14.3, Uvicorn 0.54.0 |
+| Optional AI engine | Ultralytics headless 8.4.207, CPU PyTorch 2.13.0, Torchvision 0.28.0, OpenCV 5.0.0.93, yt-dlp 2026.10.26, FFmpeg/FFprobe |
 | Persistence and messaging | PostgreSQL 17, RabbitMQ 4.2, MinIO `RELEASE.2025-10-15T17-29-55Z` |
 | Testing | Spring Boot Test/JUnit, Vitest/Testing Library, Pytest 9.2.0 |
 
-Backend dependencies include Spring Web MVC, Data JPA, Validation, Actuator, AMQP, and Flyway. Phase 1 installs no PyTorch, Ultralytics, OpenCV, model weights, or GPU runtime. Exact Java, Node, and Python dependencies are recorded in their service manifests and the frontend lockfile.
+Backend dependencies include Spring Web MVC, Data JPA, Validation, Actuator, AMQP, and Flyway. Base Python HTTP dependencies stay separate from the optional AI requirements. The default worker container includes CPU AI packages and FFmpeg, with no model weights or CUDA runtime. Exact Java, Node, and Python dependencies are recorded in their service manifests and the frontend lockfile.
 
 ## Start with Docker Compose
 
@@ -53,7 +56,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-The initial build downloads dependencies and builds the MinIO server from its pinned official source release. It can take longer than later starts. All services use CPU-compatible defaults; no GPU is required.
+The initial build downloads dependencies, installs CPU inference packages in the worker, and builds the MinIO server from its pinned official source release. It can take longer than later starts. All services use CPU-compatible defaults; no GPU is required. Worker health does not load YOLO weights.
 
 | Service | Local URL / port | Purpose |
 | --- | --- | --- |
@@ -109,8 +112,10 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 
 - [Architecture and current API contracts](docs/architecture.md)
 - [Database schema, persistence mappings, and tests](docs/database-design.md)
+- [Independent Python detection engine and CLI](docs/ai-detection-engine.md)
 - [Development environment, configuration, startup, and validation](docs/development.md)
 - [Development phases](docs/roadmap.md)
+- [Phase 03 validation results](docs/phase-03-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

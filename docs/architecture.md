@@ -13,16 +13,16 @@ flowchart TD
     rabbit -.->|Future asynchronous jobs| worker[Python AI worker]
     backend -.->|Future object metadata / links| minio[(MinIO videos)]
     worker -.->|Future video objects| minio
-    worker -.->|Future download / inference / encoding| pipeline[Video processing pipeline]
+    worker -->|Explicit CLI / library call| pipeline[Video processing pipeline]
 ```
 
-Solid arrows describe current integrations. Dashed arrows describe later phases. Through Phase 02, the backend has no worker HTTP client, job publisher, or storage SDK. The worker exposes health without starting a queue consumer or importing AI libraries. MinIO is provisioned infrastructure; no buckets or video workflows are created yet.
+Solid arrows describe current integrations. Dashed arrows describe later phases. Through Phase 03, the backend has no worker HTTP client, job publisher, or storage SDK. The worker exposes health without starting a queue consumer or importing AI libraries at startup; its video pipeline runs only through explicit CLI/library calls. MinIO is provisioned infrastructure; video transfers are not integrated yet.
 
 | Component | Responsibilities |
 | --- | --- |
 | Frontend | Navigation, presentation, backend status, and future job interaction |
 | Backend | API contracts, validation, exceptions, CORS, persistence configuration, migrations, future business logic |
-| AI worker | Independent HTTP health service now; future downloading, inference, and video processing |
+| AI worker | Independent health service and explicit local/authorized-YouTube video detection engine |
 | PostgreSQL | Backend metadata and Flyway migration history |
 | RabbitMQ | Future asynchronous job transport; current backend dependency health check |
 | MinIO | Persistent S3-compatible object storage for future videos |
@@ -47,9 +47,11 @@ The API client defaults to `/api/v1`. Vite proxies `/api` to Spring Boot, keepin
 
 ## AI worker
 
-The worker uses FastAPI with API, services, workers, config, and schemas packages. Pydantic validates process settings. `python -m app` starts Uvicorn with the configured host, port, and JSON logging. Startup does not require PostgreSQL, RabbitMQ, MinIO, CUDA, or model weights.
+The worker uses FastAPI with API, services, workers, config, and schemas packages. Pydantic validates process settings. `python -m app` starts Uvicorn with the configured host, port, and JSON logging. Startup does not require PostgreSQL, RabbitMQ, MinIO, CUDA, model weights, or the optional AI Python dependencies.
 
-`/health` verifies that the worker HTTP process can serve requests. It does not claim that future AI dependencies, queue consumers, or video processing are ready.
+Phase 03 adds `DetectionPipeline`, lazy cached YOLO26s loading, streamed frame inference, progress callbacks, bounded source handling, FFmpeg export, and JSON statistics. The library and CLI run independently of FastAPI and a broker. Counts describe bounding-box detection events across frames, not unique objects. Database model availability is not changed by local CLI support. See [ai-detection-engine.md](ai-detection-engine.md) for module boundaries and configuration.
+
+`/health` verifies that the worker HTTP process can serve requests. It does not claim that model weights, queue consumers, or an inference execution are ready. There is no public synchronous inference endpoint.
 
 ## Current API contracts
 

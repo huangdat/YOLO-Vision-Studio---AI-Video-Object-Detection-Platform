@@ -51,6 +51,8 @@ downloads/
 *.pth
 *.onnx
 *.engine
+model-cache/
+runs/
 
 # Logs / operating systems
 *.log

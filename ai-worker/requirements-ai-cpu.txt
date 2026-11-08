@@ -1,0 +1,5 @@
+# Bootstrap CPU-only PyTorch from its official index, then install requirements-ai.txt.
+# Keeping this index scoped to the bootstrap avoids resolving unrelated packages here.
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0
+torchvision==0.28.0
