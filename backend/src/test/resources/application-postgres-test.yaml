@@ -6,6 +6,16 @@ spring:
       ddl-auto: validate
   rabbitmq:
     password: test-only-unused
+    # Messaging ITs start their own broker and re-enable these explicitly.
+    listener:
+      simple:
+        auto-startup: false
+app:
+  messaging:
+    outbox:
+      enabled: false
+    jobs:
+      lease-monitor-enabled: false
 management:
   health:
     rabbit:

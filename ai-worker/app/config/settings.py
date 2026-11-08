@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,6 +50,62 @@ class Settings(BaseSettings):
     processing_timeout_seconds: float = Field(
         default=1800, gt=0, allow_inf_nan=False, validation_alias="AI_PROCESSING_TIMEOUT_SECONDS"
     )
+
+    # RabbitMQ: names are shared with the Spring Boot backend so both declare identical topology.
+    rabbitmq_host: str = Field(default="localhost", min_length=1, validation_alias="RABBITMQ_HOST")
+    rabbitmq_port: int = Field(default=5672, ge=1, le=65535, validation_alias="RABBITMQ_PORT")
+    rabbitmq_username: str = Field(default="yolovision", min_length=1, validation_alias="RABBITMQ_USERNAME")
+    rabbitmq_password: SecretStr | None = Field(default=None, validation_alias="RABBITMQ_PASSWORD")
+    rabbitmq_vhost: str = Field(default="/", min_length=1, validation_alias="RABBITMQ_VHOST")
+    rabbitmq_heartbeat_seconds: int = Field(default=60, ge=10, le=600, validation_alias="RABBITMQ_HEARTBEAT_SECONDS")
+    command_exchange: str = Field(default="vision.detection.commands", validation_alias="RABBITMQ_COMMAND_EXCHANGE")
+    command_queue: str = Field(default="vision.detection.jobs", validation_alias="RABBITMQ_COMMAND_QUEUE")
+    command_routing_key: str = Field(default="detection.execute", validation_alias="RABBITMQ_COMMAND_ROUTING_KEY")
+    event_exchange: str = Field(default="vision.detection.events", validation_alias="RABBITMQ_EVENT_EXCHANGE")
+    event_queue: str = Field(default="vision.detection.events.backend", validation_alias="RABBITMQ_EVENT_QUEUE")
+    event_routing_key: str = Field(default="detection.status", validation_alias="RABBITMQ_EVENT_ROUTING_KEY")
+    dead_letter_exchange: str = Field(
+        default="vision.detection.dead-letter.exchange", validation_alias="RABBITMQ_DEAD_LETTER_EXCHANGE"
+    )
+    dead_letter_queue: str = Field(default="vision.detection.dead-letter", validation_alias="RABBITMQ_DEAD_LETTER_QUEUE")
+    dead_letter_routing_key: str = Field(
+        default="detection.dead-letter", validation_alias="RABBITMQ_DEAD_LETTER_ROUTING_KEY"
+    )
+    delivery_limit: int = Field(default=5, ge=1, le=100, validation_alias="RABBITMQ_DELIVERY_LIMIT")
+
+    # Worker execution. One inference at a time per process by default (CPU/GPU memory).
+    worker_concurrency: int = Field(default=1, ge=1, le=16, validation_alias="WORKER_CONCURRENCY")
+    worker_prefetch_count: int | None = Field(default=None, ge=1, le=64, validation_alias="WORKER_PREFETCH_COUNT")
+    job_max_retries: int = Field(default=3, ge=1, le=20, validation_alias="JOB_MAX_RETRIES")
+    worker_retry_backoff_seconds: float = Field(
+        default=5, ge=0, le=300, allow_inf_nan=False, validation_alias="WORKER_RETRY_BACKOFF_SECONDS"
+    )
+    worker_progress_interval_seconds: float = Field(
+        default=5, gt=0, le=300, allow_inf_nan=False, validation_alias="WORKER_PROGRESS_INTERVAL_SECONDS"
+    )
+    worker_progress_min_step: int = Field(default=5, ge=1, le=50, validation_alias="WORKER_PROGRESS_MIN_STEP")
+    worker_heartbeat_seconds: float = Field(
+        default=30, gt=0, le=600, allow_inf_nan=False, validation_alias="WORKER_HEARTBEAT_SECONDS"
+    )
+    worker_shutdown_timeout_seconds: float = Field(
+        default=60, ge=0, le=3600, allow_inf_nan=False, validation_alias="WORKER_SHUTDOWN_TIMEOUT_SECONDS"
+    )
+    worker_allow_model_download: bool = Field(default=False, validation_alias="WORKER_ALLOW_MODEL_DOWNLOAD")
+    worker_health_file: Path | None = Field(default=None, validation_alias="WORKER_HEALTH_FILE")
+
+    # Minimal artifact storage for completed jobs (MinIO, S3-compatible).
+    minio_endpoint: str = Field(default="http://localhost:9000", min_length=1, validation_alias="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="yolovision", min_length=1, validation_alias="MINIO_ACCESS_KEY")
+    minio_secret_key: SecretStr | None = Field(default=None, validation_alias="MINIO_SECRET_KEY")
+    minio_bucket: str = Field(default="videos", pattern=r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$",
+                              validation_alias="MINIO_BUCKET")
+    minio_object_prefix: str = Field(default="detections", pattern=r"^[a-z0-9][a-z0-9/_-]{0,62}[a-z0-9]$",
+                                     validation_alias="MINIO_OBJECT_PREFIX")
+    minio_region: str | None = Field(default=None, validation_alias="MINIO_REGION")
+
+    @property
+    def effective_prefetch_count(self) -> int:
+        return max(self.worker_prefetch_count or self.worker_concurrency, self.worker_concurrency)
 
     @field_validator("log_level", mode="before")
     @classmethod

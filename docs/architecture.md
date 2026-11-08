@@ -8,24 +8,25 @@ YOLO Vision Studio separates the browser application, API and metadata service, 
 flowchart TD
     frontend[React frontend] -->|REST: system information| backend[Spring Boot backend]
     backend -->|JPA / Flyway| postgres[(PostgreSQL metadata)]
-    backend -->|Health connection| rabbit[RabbitMQ]
-    backend -.->|Future job publishing| rabbit
-    rabbit -.->|Future asynchronous jobs| worker[Python AI worker]
-    backend -.->|Future object metadata / links| minio[(MinIO videos)]
-    worker -.->|Future video objects| minio
-    worker -->|Explicit CLI / library call| pipeline[Video processing pipeline]
+    backend -->|Outbox: confirmed job commands| rabbit[RabbitMQ]
+    rabbit -->|vision.detection.jobs| worker[Python detection consumer]
+    worker -->|Progress / completion / failure events| rabbit
+    rabbit -->|vision.detection.events.backend| backend
+    worker -->|detected.mp4 + result.json| minio[(MinIO videos)]
+    worker -->|DetectionPipeline| pipeline[Video processing pipeline]
+    backend -.->|Future download links| minio
 ```
 
-Solid arrows describe current integrations. Dashed arrows describe later phases. Through Phase 03, the backend has no worker HTTP client, job publisher, or storage SDK. The worker exposes health without starting a queue consumer or importing AI libraries at startup; its video pipeline runs only through explicit CLI/library calls. MinIO is provisioned infrastructure; video transfers are not integrated yet.
+Solid arrows describe current integrations; dashed arrows describe later phases. Since Phase 05, the backend and the worker communicate only through RabbitMQ: there is no worker HTTP client and no synchronous inference. The FastAPI health service is unchanged and loads no AI libraries at startup. The separate consumer process loads a model only when a job requires one. The worker stores job artifacts in MinIO; the backend records only their object keys. See [asynchronous-job-processing.md](asynchronous-job-processing.md).
 
 | Component | Responsibilities |
 | --- | --- |
 | Frontend | Navigation, presentation, backend status, and future job interaction |
-| Backend | API contracts, validation, exceptions, CORS, persistence configuration, migrations, future business logic |
-| AI worker | Independent health service and explicit local/authorized-YouTube video detection engine |
+| Backend | API contracts, validation, exceptions, CORS, persistence, migrations, job submission, outbox publication, event-driven job lifecycle |
+| AI worker | Health service, CLI, and a RabbitMQ consumer that runs the detection engine and stores artifacts |
 | PostgreSQL | Backend metadata and Flyway migration history |
-| RabbitMQ | Future asynchronous job transport; current backend dependency health check |
-| MinIO | Persistent S3-compatible object storage for future videos |
+| RabbitMQ | Durable quorum queues for job commands and worker events, with dead-lettering |
+| MinIO | Private storage for completed job artifacts (`detections/<jobId>/…`) |
 
 The frontend communicates only with Spring Boot. Python inference must never run inside Spring Boot. Neither media files nor downloaded model weights belong in PostgreSQL or Git. Services exchange metadata and object references when those contracts are introduced.
 
@@ -79,7 +80,7 @@ Phase 04 replaces the single-model allowlist with `model_registry.py`, which lis
 
 Read-only model catalog, served by Spring Boot from PostgreSQL (works while the worker is offline): `GET /api/v1/models` (optional `version`, `size`, `enabled` filters), `GET /api/v1/models/versions`, and `GET /api/v1/models/{modelKey}`. See [yolo-model-management.md](yolo-model-management.md#5-spring-boot-rest-api-read-only) for response shapes and errors.
 
-The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Detection job APIs, SSE progress events, messaging schemas, and video object contracts belong to later phases.
+The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Public detection job APIs, SSE progress events, and video download contracts belong to later phases. The RabbitMQ message contracts (schema version 1) are documented in [asynchronous-job-processing.md](asynchronous-job-processing.md#3-message-contracts-schema-version-1).
 
 ## Deployment and persistence
 

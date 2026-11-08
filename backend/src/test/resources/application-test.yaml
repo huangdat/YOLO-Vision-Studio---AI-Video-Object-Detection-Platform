@@ -13,6 +13,16 @@ spring:
       ddl-auto: create-drop
   rabbitmq:
     password: test-only-unused
+    # No broker in the fast H2 profile: listeners stay stopped and schedulers off.
+    listener:
+      simple:
+        auto-startup: false
+app:
+  messaging:
+    outbox:
+      enabled: false
+    jobs:
+      lease-monitor-enabled: false
 management:
   health:
     rabbit:

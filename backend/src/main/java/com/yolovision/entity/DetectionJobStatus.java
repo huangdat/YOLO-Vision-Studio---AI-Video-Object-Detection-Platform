@@ -1,6 +1,6 @@
 package com.yolovision.entity;
 
-/** Persisted by name; processing transitions are defined in a later phase. */
+/** Persisted by name. Legal transitions are enforced by DetectionJobLifecycleService. */
 public enum DetectionJobStatus {
     PENDING,
     QUEUED,

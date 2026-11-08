@@ -5,6 +5,46 @@ x-service-defaults: &service-defaults
   networks:
     - vision
 
+# Detection messaging topology; the backend and the worker must agree on every value.
+x-messaging-environment: &messaging-environment
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-yolovision}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+  RABBITMQ_COMMAND_EXCHANGE: ${RABBITMQ_COMMAND_EXCHANGE:-vision.detection.commands}
+  RABBITMQ_COMMAND_QUEUE: ${RABBITMQ_COMMAND_QUEUE:-vision.detection.jobs}
+  RABBITMQ_COMMAND_ROUTING_KEY: ${RABBITMQ_COMMAND_ROUTING_KEY:-detection.execute}
+  RABBITMQ_EVENT_EXCHANGE: ${RABBITMQ_EVENT_EXCHANGE:-vision.detection.events}
+  RABBITMQ_EVENT_QUEUE: ${RABBITMQ_EVENT_QUEUE:-vision.detection.events.backend}
+  RABBITMQ_EVENT_ROUTING_KEY: ${RABBITMQ_EVENT_ROUTING_KEY:-detection.status}
+  RABBITMQ_DEAD_LETTER_EXCHANGE: ${RABBITMQ_DEAD_LETTER_EXCHANGE:-vision.detection.dead-letter.exchange}
+  RABBITMQ_DEAD_LETTER_QUEUE: ${RABBITMQ_DEAD_LETTER_QUEUE:-vision.detection.dead-letter}
+  RABBITMQ_DEAD_LETTER_ROUTING_KEY: ${RABBITMQ_DEAD_LETTER_ROUTING_KEY:-detection.dead-letter}
+  RABBITMQ_DELIVERY_LIMIT: ${RABBITMQ_DELIVERY_LIMIT:-5}
+  MINIO_ENDPOINT: http://minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-yolovision}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+  MINIO_BUCKET: ${MINIO_BUCKET:-videos}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+# AI engine settings shared by the HTTP health service and the detection consumer.
+x-ai-environment: &ai-environment
+  AI_DEVICE: ${AI_DEVICE:-auto}
+  AI_MODEL_CACHE_DIR: /data/models
+  AI_TEMP_DIR: /data/temp
+  AI_OUTPUT_DIR: /data/outputs
+  AI_LOCAL_INPUT_DIR: /data/inputs
+  AI_DEFAULT_CONFIDENCE: ${AI_DEFAULT_CONFIDENCE:-0.25}
+  AI_DEFAULT_IMAGE_SIZE: ${AI_DEFAULT_IMAGE_SIZE:-960}
+  AI_MAX_VIDEO_DURATION_SECONDS: ${AI_MAX_VIDEO_DURATION_SECONDS:-300}
+  AI_MAX_VIDEO_SIZE_MB: ${AI_MAX_VIDEO_SIZE_MB:-200}
+  AI_MAX_DOWNLOAD_HEIGHT: ${AI_MAX_DOWNLOAD_HEIGHT:-720}
+  AI_CPU_THREADS: ${AI_CPU_THREADS:-4}
+  AI_MAX_FRAME_PIXELS: ${AI_MAX_FRAME_PIXELS:-8294400}
+  AI_FALLBACK_FPS: ${AI_FALLBACK_FPS:-30}
+  AI_PROCESSING_TIMEOUT_SECONDS: ${AI_PROCESSING_TIMEOUT_SECONDS:-1800}
+  AI_YOUTUBE_JS_RUNTIME: ${AI_YOUTUBE_JS_RUNTIME:-deno}
+
 services:
   frontend:
     <<: *service-defaults
@@ -29,6 +69,7 @@ services:
     build:
       context: ./backend
     environment:
+      <<: *messaging-environment
       SERVER_PORT: "8080"
       APP_VERSION: ${APP_VERSION:-1.0.0}
       DB_HOST: postgres
@@ -36,16 +77,9 @@ services:
       DB_NAME: ${DB_NAME:-yolovision}
       DB_USERNAME: ${DB_USERNAME:-yolovision}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: "5672"
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-yolovision}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-yolovision}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-      MINIO_BUCKET: ${MINIO_BUCKET:-videos}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      JOB_PROCESSING_TIMEOUT_SECONDS: ${JOB_PROCESSING_TIMEOUT_SECONDS:-1800}
+      JOB_QUEUE_TIMEOUT_SECONDS: ${JOB_QUEUE_TIMEOUT_SECONDS:-86400}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -61,38 +95,49 @@ services:
     build:
       context: ./ai-worker
     environment:
+      <<: [*messaging-environment, *ai-environment]
       AI_WORKER_HOST: "0.0.0.0"
       AI_WORKER_PORT: "8000"
-      AI_DEVICE: ${AI_DEVICE:-auto}
-      AI_MODEL_CACHE_DIR: /data/models
-      AI_TEMP_DIR: /data/temp
-      AI_OUTPUT_DIR: /data/outputs
-      AI_LOCAL_INPUT_DIR: /data/inputs
-      AI_DEFAULT_CONFIDENCE: ${AI_DEFAULT_CONFIDENCE:-0.25}
-      AI_DEFAULT_IMAGE_SIZE: ${AI_DEFAULT_IMAGE_SIZE:-960}
-      AI_MAX_VIDEO_DURATION_SECONDS: ${AI_MAX_VIDEO_DURATION_SECONDS:-300}
-      AI_MAX_VIDEO_SIZE_MB: ${AI_MAX_VIDEO_SIZE_MB:-200}
-      AI_MAX_DOWNLOAD_HEIGHT: ${AI_MAX_DOWNLOAD_HEIGHT:-720}
-      AI_CPU_THREADS: ${AI_CPU_THREADS:-4}
-      AI_MAX_FRAME_PIXELS: ${AI_MAX_FRAME_PIXELS:-8294400}
-      AI_FALLBACK_FPS: ${AI_FALLBACK_FPS:-30}
-      AI_PROCESSING_TIMEOUT_SECONDS: ${AI_PROCESSING_TIMEOUT_SECONDS:-1800}
-      AI_YOUTUBE_JS_RUNTIME: ${AI_YOUTUBE_JS_RUNTIME:-deno}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: "5672"
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-yolovision}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-yolovision}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-      MINIO_BUCKET: ${MINIO_BUCKET:-videos}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${AI_WORKER_PORT:-8000}:8000"
     volumes:
       - ai-model-cache:/data/models
       - ai-temp-data:/data/temp
       - ai-output-data:/data/outputs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # Long-running RabbitMQ consumer from the same image. It loads a model only when a job
+  # needs it and never downloads weights unless WORKER_ALLOW_MODEL_DOWNLOAD=true. Prepare a model
+  # in the shared cache first: docker compose exec ai-detection-consumer python -m app.cli models prepare --model <key>
+  ai-detection-consumer:
+    <<: *service-defaults
+    build:
+      context: ./ai-worker
+    command: [python, -m, app.workers.rabbitmq_worker]
+    stop_grace_period: ${WORKER_STOP_GRACE_PERIOD:-90s}
+    environment:
+      <<: [*messaging-environment, *ai-environment]
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      WORKER_PREFETCH_COUNT: ${WORKER_PREFETCH_COUNT:-1}
+      JOB_MAX_RETRIES: ${JOB_MAX_RETRIES:-3}
+      WORKER_ALLOW_MODEL_DOWNLOAD: ${WORKER_ALLOW_MODEL_DOWNLOAD:-false}
+      WORKER_HEARTBEAT_SECONDS: ${WORKER_HEARTBEAT_SECONDS:-30}
+      WORKER_SHUTDOWN_TIMEOUT_SECONDS: ${WORKER_SHUTDOWN_TIMEOUT_SECONDS:-60}
+      WORKER_HEALTH_FILE: /tmp/worker-health.json
+    volumes:
+      - ai-model-cache:/data/models
+      - ai-temp-data:/data/temp
+    healthcheck:
+      # The image healthcheck probes HTTP; this process reports through its health file instead.
+      test: [CMD, python, -c, "import json, os, sys, time; p='/tmp/worker-health.json'; sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 60 and json.load(open(p))['connected'] else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
     depends_on:
       rabbitmq:
         condition: service_healthy

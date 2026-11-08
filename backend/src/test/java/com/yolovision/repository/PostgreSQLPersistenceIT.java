@@ -53,8 +53,8 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
     @Test
     void productionMigrationsValidateAndRerunningDoesNotReapplySeeds() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
-        assertThat(flyway.info().applied()).hasSize(6);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
+        assertThat(flyway.info().applied()).hasSize(7);
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -131,7 +131,7 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
         int executed = Flyway.configure()
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-                .schemas(schema).load().migrate().migrationsExecuted;
+                .schemas(schema).target("6").load().migrate().migrationsExecuted;
 
         assertThat(executed).isEqualTo(1);
         Map<String, Object> yolo26s = jdbc.queryForMap("SELECT id, enabled, updated_at FROM " + schema
@@ -147,6 +147,44 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
                 + ".model_configs WHERE enabled ORDER BY model_key", String.class))
                 .containsExactly("yolo26s", "yolov8n");
     }
+
+    // Each test ends with at most one expected violation: PostgreSQL aborts the transaction after it.
+    @Test
+    void messagingMigrationDefaultsExistingJobsToYoutubeAndRejectsUnknownSourceTypes() {
+        DetectionJob job = persistedJob();
+        assertColumnType("detection_job_outbox", "payload", "jsonb");
+        assertColumnType("detection_results", "result_json_key", "text");
+        assertThat(jdbc.queryForObject("SELECT source_type FROM detection_jobs WHERE id = ?", String.class,
+                job.getId())).isEqualTo("YOUTUBE_URL");
+
+        assertSqlState(() -> jdbc.update("UPDATE detection_jobs SET source_type = 'FTP' WHERE id = ?",
+                job.getId()), "23514");
+    }
+
+    @Test
+    void outboxAllowsOnlyOneExecutionCommandPerJob() {
+        DetectionJob job = persistedJob();
+        jdbc.update(OUTBOX_INSERT, UUID.randomUUID(), job.getId());
+        assertThat(jdbc.queryForObject("SELECT status FROM detection_job_outbox WHERE job_id = ?", String.class,
+                job.getId())).isEqualTo("PENDING");
+
+        assertSqlState(() -> jdbc.update(OUTBOX_INSERT, UUID.randomUUID(), job.getId()), "23505");
+    }
+
+    @Test
+    void outboxPayloadMustBeAJsonObject() {
+        DetectionJob job = persistedJob();
+
+        assertSqlState(() -> jdbc.update("""
+                INSERT INTO detection_job_outbox (id, job_id, message_type, payload)
+                VALUES (?, ?, 'other', '[]'::jsonb)
+                """, UUID.randomUUID(), job.getId()), "23514");
+    }
+
+    private static final String OUTBOX_INSERT = """
+            INSERT INTO detection_job_outbox (id, job_id, message_type, payload)
+            VALUES (?, ?, 'detection.execute.v1', '{"jobId":"x"}'::jsonb)
+            """;
 
     @Test
     void schemaUsesNativeJsonbTimestampsAndTheRequiredIndexes() {

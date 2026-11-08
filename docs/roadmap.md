@@ -34,7 +34,19 @@ The normal test suite uses fake models and mocked downloads. Real inference, out
 
 The catalog registers 20 pretrained detection checkpoints (YOLOv8, YOLO11, YOLO12, YOLO26 × n/s/m/l/x) through Flyway V6, all disabled. It serves them through read-only Spring Boot APIs and lets the engine select any approved key. Explicit worker commands list, inspect, and prepare models, and a verification record is written only after a successful load. See [yolo-model-management.md](yolo-model-management.md) and [phase-04-validation.md](phase-04-validation.md). Enablement remains an administrator database action, and no preparation endpoint is exposed.
 
-Phase 05 is RabbitMQ asynchronous detection job processing, followed by Spring Boot detection APIs in Phase 06.
+## Phase 05 progress
+
+Phase 05 adds asynchronous processing:
+
+- **Submission:** an internal job submission service that requires an enabled model.
+- **Publication:** a transactional outbox published with publisher confirms.
+- **Topology:** durable quorum queues with delivery limits and a dead-letter queue.
+- **Worker:** a Python consumer that keeps AMQP heartbeats alive during long inference, sends throttled progress and heartbeat events, stores artifacts in MinIO, and classifies failures as permanent or transient with bounded retries.
+- **Lifecycle:** a forward-only, idempotent job lifecycle with persisted results, plus a lease monitor for silent jobs.
+
+See [asynchronous-job-processing.md](asynchronous-job-processing.md) and [phase-05-validation.md](phase-05-validation.md), including the real end-to-end YOLO11n run. There is still no public job endpoint, cancellation, or download link.
+
+Phase 06 adds Spring Boot detection job REST APIs on top of the internal submission service.
 
 ## Phase 1 boundaries
 

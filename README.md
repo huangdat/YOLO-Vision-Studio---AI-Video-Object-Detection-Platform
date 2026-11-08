@@ -10,7 +10,9 @@ Phase 03 adds an independent Python CLI/library for local video and authorized Y
 
 Phase 04 adds multi-version model management: a PostgreSQL catalog of 20 pretrained detection checkpoints (YOLOv8, YOLO11, YOLO12, and YOLO26; sizes n/s/m/l/x), read-only `GET /api/v1/models`, `/api/v1/models/versions`, and `/api/v1/models/{modelKey}` APIs, dynamic model selection in the Python engine, and explicit worker commands to list, inspect, and prepare models. Every model starts disabled. Catalog enablement, worker cache presence, and runtime verification are reported separately. See the [model management guide](docs/yolo-model-management.md).
 
-The browser Detection, History, and Models pages remain placeholders. RabbitMQ execution, Spring Boot detection job APIs, authentication, and object storage transfer belong to later phases.
+Phase 05 adds asynchronous job processing. Spring Boot validates a detection job and saves it in PostgreSQL. A transactional outbox then publishes it to RabbitMQ with publisher confirms. A separate Python consumer (`python -m app.workers.rabbitmq_worker`, Compose service `ai-detection-consumer`) runs the existing pipeline and stores `detected.mp4` and `result.json` in MinIO. It reports progress, completion, or failure events back. Spring Boot applies those events through an idempotent, forward-only state machine and saves the `DetectionResult`. Retries are bounded, with dead-lettering and a lease monitor for silent jobs. See the [asynchronous processing guide](docs/asynchronous-job-processing.md).
+
+The browser Detection, History, and Models pages remain placeholders. Public detection job APIs (Phase 06), authentication, and video download links belong to later phases.
 
 ## Project structure
 
@@ -67,6 +69,7 @@ The initial build downloads dependencies, installs CPU inference packages in the
 | Backend | http://localhost:8080/api/v1/models | Read-only YOLO model catalog |
 | Backend Actuator | http://localhost:8080/actuator/health | Dependency health |
 | AI worker | http://localhost:8000/health | Worker HTTP liveness |
+| Detection consumer | (no port) | RabbitMQ job consumer; health via heartbeat file |
 | PostgreSQL | `localhost:5432` | Metadata database |
 | RabbitMQ | `localhost:5672` | AMQP transport |
 | RabbitMQ management | http://localhost:15672 | Broker administration |
@@ -121,6 +124,8 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Phase 03 validation results](docs/phase-03-validation.md)
 - [YOLO model management](docs/yolo-model-management.md)
 - [Phase 04 validation results](docs/phase-04-validation.md)
+- [Asynchronous detection job processing](docs/asynchronous-job-processing.md)
+- [Phase 05 validation results](docs/phase-05-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

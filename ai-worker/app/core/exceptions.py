@@ -31,3 +31,7 @@ class VideoProcessingError(DetectionEngineError):
 
 class VideoEncodingError(DetectionEngineError):
     """Encoding or verification of the final MP4 failed."""
+
+
+class ArtifactStorageError(DetectionEngineError):
+    """Completed artifacts could not be stored durably or read back."""

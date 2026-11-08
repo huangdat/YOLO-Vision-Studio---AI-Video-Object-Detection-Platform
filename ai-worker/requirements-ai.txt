@@ -6,3 +6,6 @@ ultralytics-opencv-headless==8.4.207
 opencv-python-headless==5.0.0.93
 numpy==2.3.5
 yt-dlp[default]==2026.10.26
+# Phase 05 asynchronous worker: RabbitMQ consumer and minimal artifact storage.
+pika==1.4.4
+minio==7.2.20

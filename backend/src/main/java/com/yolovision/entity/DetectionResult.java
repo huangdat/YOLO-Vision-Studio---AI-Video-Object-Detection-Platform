@@ -44,6 +44,9 @@ public class DetectionResult {
     @Column(name = "output_video_key", nullable = false, columnDefinition = "text")
     private String outputVideoKey;
 
+    @Column(name = "result_json_key", columnDefinition = "text")
+    private String resultJsonKey;
+
     @PositiveOrZero
     @Column(name = "total_frames")
     private Integer totalFrames;
@@ -96,6 +99,14 @@ public class DetectionResult {
 
     public void setOutputVideoKey(String outputVideoKey) {
         this.outputVideoKey = outputVideoKey;
+    }
+
+    public String getResultJsonKey() {
+        return resultJsonKey;
+    }
+
+    public void setResultJsonKey(String resultJsonKey) {
+        this.resultJsonKey = resultJsonKey;
     }
 
     public Integer getTotalFrames() {

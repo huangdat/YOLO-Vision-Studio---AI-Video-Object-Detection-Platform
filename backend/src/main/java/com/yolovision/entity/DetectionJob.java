@@ -32,7 +32,7 @@ import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** A detection request and its persisted state, without processing orchestration. */
+/** A detection request and its persisted state; transitions are applied by DetectionJobLifecycleService. */
 @Entity
 @Table(name = "detection_jobs")
 public class DetectionJob {
@@ -46,6 +46,11 @@ public class DetectionJob {
     @JoinColumn(name = "model_id", nullable = false,
             foreignKey = @ForeignKey(name = "fk_detection_jobs_model"))
     private ModelConfig model;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", nullable = false, length = 32)
+    private DetectionSourceType sourceType = DetectionSourceType.YOUTUBE_URL;
 
     @NotBlank
     @Column(name = "video_url", nullable = false, columnDefinition = "text")
@@ -77,6 +82,9 @@ public class DetectionJob {
     @Max(100)
     @Column(name = "progress", nullable = false)
     private int progress;
+
+    @Column(name = "error_code", length = 64)
+    private String errorCode;
 
     @Column(name = "error_message", columnDefinition = "text")
     private String errorMessage;
@@ -123,6 +131,14 @@ public class DetectionJob {
 
     public ModelConfig getModel() {
         return model;
+    }
+
+    public DetectionSourceType getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(DetectionSourceType sourceType) {
+        this.sourceType = sourceType;
     }
 
     public String getVideoUrl() {
@@ -173,6 +189,14 @@ public class DetectionJob {
         this.progress = progress;
     }
 
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+
     public String getErrorMessage() {
         return errorMessage;
     }
@@ -203,5 +227,10 @@ public class DetectionJob {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    /** Records worker activity even when no other column changes (lease heartbeat). */
+    public void markActivity() {
+        updatedAt = Instant.now();
     }
 }

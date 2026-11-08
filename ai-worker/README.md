@@ -55,6 +55,20 @@ For an authorized single YouTube video, use `--source-type youtube` with a suppo
 .\.venv\Scripts\python.exe -m app.smoke --model yolo11n
 ```
 
+## Asynchronous detection consumer
+
+```powershell
+# Long-running RabbitMQ consumer (needs RABBITMQ_* and MINIO_* settings; see docs).
+.\.venv\Scripts\python.exe -m app.workers.rabbitmq_worker
+
+# Optional: worker tests against disposable RabbitMQ and MinIO instances.
+$env:IT_RABBITMQ_PORT='25672'; $env:IT_RABBITMQ_PASSWORD='...'
+$env:IT_MINIO_ENDPOINT='http://127.0.0.1:29000'; $env:IT_MINIO_PASSWORD='...'
+.\.venv\Scripts\python.exe -m pytest -q tests/integration
+```
+
+The consumer runs one inference at a time by default, keeps AMQP heartbeats alive during long jobs, and never downloads model weights unless `WORKER_ALLOW_MODEL_DOWNLOAD=true`. See [asynchronous-job-processing.md](../docs/asynchronous-job-processing.md).
+
 The smoke command generates a very short deterministic video, runs real inference, encodes H.264 MP4 without audio, verifies the output, and writes measured JSON statistics. Synthetic frames may legitimately produce zero detections; this is not replaced with fabricated counts.
 
 ## Linux and Docker
