@@ -68,7 +68,20 @@ The React dashboard now uses the real APIs:
 
 All pages have consistent loading, empty, and error states. See [frontend-dashboard.md](frontend-dashboard.md) and [phase-07-validation.md](phase-07-validation.md).
 
-Phase 08 adds the Detection Workspace (job submission); Phase 09 adds video preview and download.
+## Phase 08 progress
+
+The Detection route is now the Video Detection Workspace:
+
+- **Source:** a YouTube URL pre-check that mirrors the backend rules and is never stricter.
+- **Model:** version and size chosen from real catalog records. Disabled models are shown honestly and can never be submitted.
+- **Settings:** COCO class selection (vehicle preset, all 80, search, clear), confidence slider and number, and image size presets.
+- **Summary:** the exact configuration, where "Ready" means valid and enabled only.
+- **Submission:** the existing `POST /api/v1/detections`, with duplicate-submit protection and no automatic retry. Ambiguous failures point to History.
+- **After submission:** the existing job page, with live SSE progress.
+
+No backend, worker, or schema change was needed. See [video-detection-workspace.md](video-detection-workspace.md) and [phase-08-validation.md](phase-08-validation.md).
+
+Phase 09 adds detected-video preview and download.
 
 ## Phase 1 boundaries
 

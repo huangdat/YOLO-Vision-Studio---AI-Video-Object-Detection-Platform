@@ -21,7 +21,7 @@ Solid arrows describe current integrations; dashed arrows describe later phases.
 
 | Component | Responsibilities |
 | --- | --- |
-| Frontend | Dashboard statistics, model catalog, job history, job details with live SSE progress, backend status; job submission arrives in Phase 08 |
+| Frontend | Dashboard statistics, model catalog, job history, job details with live SSE progress, backend status, and the Detection Workspace that submits jobs through `POST /api/v1/detections` |
 | Backend | REST APIs (system, models, detections), SSE progress, validation, problem-detail errors, CORS, persistence, migrations, outbox publication, event-driven job lifecycle |
 | AI worker | Health service, CLI, and a RabbitMQ consumer that runs the detection engine and stores artifacts |
 | PostgreSQL | Backend metadata and Flyway migration history |
@@ -42,7 +42,7 @@ The global exception handler returns HTTP Problem Details and validation informa
 
 React functional components use TypeScript strict mode, reusable navigation/status components, and a separate Axios API layer. React Router supplies Dashboard, Detection, History, Models, and job details (`/detections/:jobId`) routes. The application shell maintains backend status across routes; the dashboard shows connection details.
 
-Since Phase 07, the Dashboard, History, Models, and job details pages read live data. Responses are checked with typed contracts and runtime shape checks, and failures are normalized into one `ApiError`. Job progress streams through `EventSource`, with a polling fallback (see [frontend-dashboard.md](frontend-dashboard.md)). The Detection route remains a labelled placeholder until the Phase 08 workspace.
+Since Phase 07, the Dashboard, History, Models, and job details pages read live data. Responses are checked with typed contracts and runtime shape checks, and failures are normalized into one `ApiError`. Job progress streams through `EventSource`, with a polling fallback (see [frontend-dashboard.md](frontend-dashboard.md)). Since Phase 08, the Detection route is the job submission workspace. It reads the model catalog, pre-validates the YouTube URL with the backend's own rules, posts exactly `{videoUrl, modelKey, confidence, imageSize, classes}`, and then opens the job page, which follows progress with the same SSE hook. Spring Boot remains the authority for validation and model enablement; the browser never contacts YouTube, RabbitMQ, MinIO, or the worker (see [video-detection-workspace.md](video-detection-workspace.md)).
 
 The API client defaults to `/api/v1`. Vite proxies `/api` to Spring Boot, keeping browser traffic on the frontend origin during development. `VITE_PROXY_TARGET` selects the backend target used by the Vite process. The browser displays loading, successful connection, and error states based on actual responses; it offers retry after failure. No detection counts or availability claims are fabricated.
 

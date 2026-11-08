@@ -1,9 +1,10 @@
-import { CanceledError } from "axios";
+import { AxiosError, AxiosHeaders, CanceledError } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { job, JOB_ID, model, page, result, summary } from "../test/fixtures";
 import { apiClient } from "./client";
 import {
   countDetections,
+  createDetection,
   detectionEventsUrl,
   getDetection,
   getDetectionResult,
@@ -126,5 +127,59 @@ describe("detection API", () => {
     expect(parseProgressEvent(raw)).toMatchObject({ status: "DETECTING", progress: 65 });
     expect(parseProgressEvent("{not json")).toBeNull();
     expect(parseProgressEvent(JSON.stringify({ jobId: JOB_ID, status: "RUNNING" }))).toBeNull();
+  });
+});
+
+describe("detection submission API", () => {
+  const body = {
+    videoUrl: "https://www.youtube.com/watch?v=abcdefghijk",
+    modelKey: "yolo11n",
+    confidence: 0.25,
+    imageSize: 640,
+    classes: [1, 2, 3, 5, 7],
+  };
+
+  it("posts exactly the request body and parses the 202 response", async () => {
+    const post = vi.spyOn(apiClient, "post").mockResolvedValueOnce({
+      status: 202,
+      data: { jobId: JOB_ID, status: "QUEUED", progress: 0, modelKey: "yolo11n", message: "Detection job accepted." },
+    });
+
+    const accepted = await createDetection(body);
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith("/detections", body, { signal: undefined });
+    expect(accepted).toEqual({
+      jobId: JOB_ID,
+      status: "QUEUED",
+      progress: 0,
+      modelKey: "yolo11n",
+      message: "Detection job accepted.",
+    });
+  });
+
+  it("normalises a problem response without retrying", async () => {
+    const headers = new AxiosHeaders();
+    const post = vi.spyOn(apiClient, "post").mockRejectedValueOnce(
+      new AxiosError("Request failed", "ERR_BAD_REQUEST", { headers }, null, {
+        status: 409,
+        statusText: "",
+        headers: {},
+        config: { headers },
+        data: { code: "MODEL_DISABLED", detail: "Model yolo11n is disabled." },
+      }),
+    );
+
+    await expect(createDetection(body)).rejects.toMatchObject({
+      kind: "http",
+      status: 409,
+      code: "MODEL_DISABLED",
+    });
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an accepted response without a job id", async () => {
+    vi.spyOn(apiClient, "post").mockResolvedValueOnce({ data: { status: "QUEUED" } });
+    await expect(createDetection(body)).rejects.toMatchObject({ kind: "invalid-response" });
   });
 });

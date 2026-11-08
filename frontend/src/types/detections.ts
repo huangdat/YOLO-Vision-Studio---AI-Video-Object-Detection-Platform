@@ -83,3 +83,21 @@ export interface DetectionProgressEvent {
   /** The job's last persisted update time. */
   timestamp: string;
 }
+
+/** CreateDetectionRequest (POST /detections). Unknown fields are rejected by the backend. */
+export interface CreateDetectionRequest {
+  videoUrl: string;
+  modelKey: string;
+  confidence: number;
+  imageSize: number;
+  classes: number[];
+}
+
+/** DetectionJobAcceptedResponse, returned with HTTP 202 and a Location header. */
+export interface DetectionJobAccepted {
+  jobId: string;
+  status: DetectionJobStatus;
+  progress: number;
+  modelKey: string;
+  message: string;
+}

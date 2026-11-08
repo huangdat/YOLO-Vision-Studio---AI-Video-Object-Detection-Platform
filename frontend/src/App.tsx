@@ -5,10 +5,10 @@ import { Sidebar } from "./components/Sidebar";
 import { StatusBadge } from "./components/StatusBadge";
 import { useBackendStatus } from "./hooks/useBackendStatus";
 import { Dashboard } from "./pages/Dashboard";
+import { Detection } from "./pages/Detection";
 import { DetectionDetails } from "./pages/DetectionDetails";
 import { History } from "./pages/History";
 import { Models } from "./pages/Models";
-import { Placeholder } from "./pages/Placeholder";
 
 export function App() {
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -66,16 +66,7 @@ export function App() {
               path="/"
               element={<Dashboard status={status} refresh={refresh} />}
             />
-            <Route
-              path="/detection"
-              element={
-                <Placeholder
-                  title="Detection"
-                  description="Your future workspace for AI-powered video analysis."
-                  icon="scan"
-                />
-              }
-            />
+            <Route path="/detection" element={<Detection />} />
             <Route path="/history" element={<History />} />
             <Route path="/detections/:jobId" element={<DetectionDetails />} />
             <Route path="/models" element={<Models />} />

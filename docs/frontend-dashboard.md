@@ -1,6 +1,6 @@
 # Frontend dashboard
 
-Phase 07 connects the React dashboard to the Spring Boot APIs built in Phases 04–06. Every number, row, and status shown comes from the backend; nothing is invented when a request fails. Job submission (the Detection Workspace) is Phase 08, and video preview or download is Phase 09.
+Phase 07 connects the React dashboard to the Spring Boot APIs built in Phases 04–06. Every number, row, and status shown comes from the backend; nothing is invented when a request fails. Job submission (the Detection Workspace) was added in Phase 08 and is described in [video-detection-workspace.md](video-detection-workspace.md). Video preview or download is Phase 09.
 
 ## 1. Architecture
 
@@ -12,10 +12,12 @@ src/
               models.ts, detections.ts, system.ts
   types/      api.ts, models.ts, detections.ts   (match the backend DTOs exactly)
   hooks/      useApiResource.ts, useDetectionProgress.ts, useBackendStatus.ts
-  lib/        format.ts (dates, durations, sizes), jobStatus.ts (labels, tones, order)
+  lib/        format.ts (dates, durations, sizes), jobStatus.ts (labels, tones, order),
+              youtube.ts, modelSelection.ts, cocoClasses.ts, detectionForm.ts (Phase 08)
   components/ JobStatusBadge, ProgressBar, StatCard, StateViews (loading/empty/error),
-              PaginationControls, DetectionTable, PageHeader, Sidebar, Icon, StatusBadge
-  pages/      Dashboard, Models, History, DetectionDetails, Placeholder (Detection)
+              PaginationControls, DetectionTable, PageHeader, Sidebar, Icon, StatusBadge,
+              workspace/ (Phase 08 Detection Workspace form components)
+  pages/      Dashboard, Detection, Models, History, DetectionDetails
   test/       fixtures.ts (data + FakeEventSource), render.tsx (router helpers)
 ```
 
@@ -29,7 +31,7 @@ src/
 | `/history` | History | `GET /detections` (server-side pages) |
 | `/detections/:jobId` | Job details | Job, SSE progress, and result metadata |
 | `/models` | Models | Catalog, versions, and one model's details |
-| `/detection` | Placeholder | The Detection Workspace arrives in Phase 08 |
+| `/detection` | Detection Workspace | Catalog, versions, and `POST /detections` (see [video-detection-workspace.md](video-detection-workspace.md)) |
 
 Filters and pagination are stored in the URL, for example `/history?status=FAILED&page=1` or `/models?version=YOLO26&model=yolo26s`, so reloads, links, and the back button keep the view. Invalid URL values are ignored rather than sent to the API.
 
@@ -171,15 +173,15 @@ Executed results are recorded in [phase-07-validation.md](phase-07-validation.md
 - **Count timing.** Dashboard counts are separate queries, so a transition between them can momentarily skew "In progress".
 - **Class names.** Class IDs on the job page are raw numbers, because the API does not expose model class names.
 - **No authentication.** Everything is development-only, like the API (see [detection-rest-api.md](detection-rest-api.md)).
-- **Not yet built.** No job submission form, cancellation, video preview, or download.
+- **Not yet built.** No cancellation, video preview, or download. (Job submission was added in Phase 08.)
 
-## 16. Future Detection Workspace (Phase 08)
+## 16. Detection Workspace (Phase 08)
 
-The workspace can reuse:
+The workspace was built on the pieces Phase 07 prepared:
 
-- `listModels({ enabled: true })` for the model selector
-- `ApiError.fieldErrors` to show per-field validation from `POST /detections`
-- the `Location` header to navigate to `/detections/:jobId`
-- `useDetectionProgress` and `JobStatusBadge`/`ProgressBar` for live progress
+- the model catalog (`listModels` and `getModelVersions`), loaded unfiltered so disabled models can be shown honestly
+- `ApiError.fieldErrors` for per-field messages from `POST /detections`
+- the 202 body's `jobId` for navigation to `/detections/:jobId`
+- `useDetectionProgress` on the existing job page, with no second SSE connection
 
-`api/detections.ts` currently has no create function; Phase 08 adds it next to the existing read functions.
+`createDetection` now sits next to the read functions in `api/detections.ts`. See [video-detection-workspace.md](video-detection-workspace.md).

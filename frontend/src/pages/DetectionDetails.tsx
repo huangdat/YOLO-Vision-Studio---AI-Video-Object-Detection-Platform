@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { getDetection, getDetectionResult, isJobId } from "../api/detections";
 import { Icon } from "../components/Icon";
@@ -36,9 +36,22 @@ const CONNECTION_LABEL: Record<ProgressConnection, string> = {
   closed: "",
 };
 
+/** True when the workspace navigated here right after the backend accepted this job. */
+function wasJustSubmitted(state: unknown, jobId: string | undefined): boolean {
+  if (typeof state !== "object" || state === null || !("submitted" in state)) return false;
+  const submitted: unknown = state.submitted;
+  return (
+    typeof submitted === "object" &&
+    submitted !== null &&
+    "jobId" in submitted &&
+    submitted.jobId === jobId
+  );
+}
+
 export function DetectionDetails() {
   const { jobId } = useParams();
   const validId = isJobId(jobId);
+  const justSubmitted = wasJustSubmitted(useLocation().state, jobId);
   const job = useApiResource(
     (signal) => getDetection(jobId ?? "", signal),
     `job:${jobId}`,
@@ -109,6 +122,18 @@ export function DetectionDetails() {
   const meta = JOB_STATUS[current.status];
   return (
     <DetailsShell title={`Job ${shortId(loaded.jobId)}`}>
+      {justSubmitted && (
+        <div className="submitted-notice" role="status">
+          <Icon name="check" size={16} />
+          <p>
+            Job submitted. The backend accepted it and queued it for the AI worker; progress
+            updates appear below.{" "}
+            <Link to="/detection" className="text-link">
+              Start another detection
+            </Link>
+          </p>
+        </div>
+      )}
       <section className="panel job-status-panel" aria-labelledby="status-title">
         <div className="section-heading">
           <div>

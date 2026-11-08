@@ -8,7 +8,7 @@ const navigation: {
   soon?: boolean;
 }[] = [
   { to: "/", label: "Dashboard", icon: "dashboard" },
-  { to: "/detection", label: "Detection", icon: "scan", soon: true },
+  { to: "/detection", label: "Detection", icon: "scan" },
   { to: "/history", label: "History", icon: "history" },
   { to: "/models", label: "Models", icon: "models" },
 ];
@@ -68,8 +68,8 @@ export function Sidebar({ open, close }: { open: boolean; close: () => void }) {
               <Icon name="code" />
             </span>
             <div>
-              <strong>Dashboard &amp; API integration</strong>
-              <p>Phase 07 · Live job data</p>
+              <strong>Video detection workspace</strong>
+              <p>Phase 08 · Submit detection jobs</p>
             </div>
             <div className="phase-progress">
               <span />

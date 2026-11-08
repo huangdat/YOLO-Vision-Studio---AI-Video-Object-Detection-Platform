@@ -13,7 +13,9 @@ import {
 } from "./guards";
 import type { PageResponse } from "../types/api";
 import type {
+  CreateDetectionRequest,
   DetectionHistoryQuery,
+  DetectionJobAccepted,
   DetectionJob,
   DetectionJobSummary,
   DetectionProgressEvent,
@@ -164,6 +166,27 @@ export function getDetectionResult(
       { signal },
     );
     return toResult(data);
+  });
+}
+
+/**
+ * POST /detections. Returns the job accepted with HTTP 202. Never retried automatically:
+ * a timeout or network error does not prove the job was rejected (see ApiError.kind).
+ */
+export function createDetection(
+  body: CreateDetectionRequest,
+  signal?: AbortSignal,
+): Promise<DetectionJobAccepted> {
+  return request(async () => {
+    const { data } = await apiClient.post<unknown>("/detections", body, { signal });
+    const accepted = record(data);
+    return {
+      jobId: string(accepted, "jobId"),
+      status: status(accepted),
+      progress: number(accepted, "progress"),
+      modelKey: string(accepted, "modelKey"),
+      message: string(accepted, "message"),
+    };
   });
 }
 

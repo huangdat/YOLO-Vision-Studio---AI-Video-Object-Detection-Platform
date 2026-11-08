@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, MESSAGES } from "../api/client";
 import { getDetection, getDetectionResult } from "../api/detections";
@@ -145,5 +146,32 @@ describe("Detection details page", () => {
     expect(await screen.findByText(MESSAGES.network)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(screen.getByText("Queued")).toBeTruthy());
+  });
+});
+
+describe("Detection details after submission", () => {
+  const renderSubmitted = (state: unknown) =>
+    render(
+      <MemoryRouter initialEntries={[{ pathname: `/detections/${JOB_ID}`, state }]}>
+        <Routes>
+          <Route path="/detections/:jobId" element={<DetectionDetails />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+  it("confirms the accepted job and reuses the single progress stream", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "QUEUED", progress: 0, startedAt: null }));
+    renderSubmitted({ submitted: { jobId: JOB_ID, status: "QUEUED" } });
+
+    expect(await screen.findByText(/Job submitted\. The backend accepted it/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Start another detection" }).getAttribute("href")).toBe("/detection");
+    expect(FakeEventSource.open()).toHaveLength(1);
+  });
+
+  it("shows no notice for ordinary visits or another job's state", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "QUEUED", progress: 0, startedAt: null }));
+    renderSubmitted({ submitted: { jobId: "00000000-0000-4000-8000-000000000000" } });
+    expect(await screen.findByText("Queued")).toBeTruthy();
+    expect(screen.queryByText(/Job submitted/)).toBeNull();
   });
 });

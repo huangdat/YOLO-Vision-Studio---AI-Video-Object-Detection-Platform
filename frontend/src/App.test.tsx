@@ -72,16 +72,21 @@ describe("workspace", () => {
     expect(await screen.findByText("Spring Boot · v1.0.0")).toBeTruthy();
   });
 
-  it("routes to the detection placeholder without exposing a detection form", async () => {
+  it("routes /detection to the detection workspace without a 'Soon' marker", async () => {
     vi.mocked(getSystemInfo).mockResolvedValueOnce(info);
     render(
       <MemoryRouter initialEntries={["/detection"]}>
         <App />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("heading", { name: "Detection" })).toBeTruthy();
-    expect(screen.getByText(/this feature is not available yet/)).toBeTruthy();
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Video Detection Workspace" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: /YouTube video URL/ })).toBeTruthy();
+    const navLink = screen.getByRole("link", { name: "Detection" });
+    expect(navLink.className).toContain("active");
+    expect(navLink.textContent).not.toContain("Soon");
+    expect(await screen.findByText("No models are registered.")).toBeTruthy();
     await screen.findByText("Backend connected");
   });
 

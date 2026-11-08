@@ -21,7 +21,16 @@ Phase 07 connects the React dashboard to these APIs:
 - **Models:** the model catalog with server-side filters.
 - **Job details:** live progress over SSE with a polling fallback, plus measured result statistics.
 
-All pages handle loading, empty, and error states. See the [frontend dashboard guide](docs/frontend-dashboard.md). The Detection submission workspace (Phase 08), authentication, and video preview/download (Phase 09) remain future work.
+All pages handle loading, empty, and error states. See the [frontend dashboard guide](docs/frontend-dashboard.md).
+
+Phase 08 adds the **Video Detection Workspace** at `/detection`:
+
+- Enter a YouTube URL, pre-checked with the backend's rules.
+- Pick a YOLO version and size from the real catalog; disabled models cannot be submitted.
+- Choose COCO classes (vehicles by default), the confidence threshold, and the image size.
+- Submit through `POST /api/v1/detections`, then follow live progress on the job page.
+
+Submissions are protected against duplicates and never retried automatically. See the [Video Detection Workspace guide](docs/video-detection-workspace.md). Authentication and video preview/download (Phase 09) remain future work.
 
 ## Project structure
 
@@ -141,6 +150,8 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Phase 06 validation results](docs/phase-06-validation.md)
 - [Frontend dashboard and API integration](docs/frontend-dashboard.md)
 - [Phase 07 validation results](docs/phase-07-validation.md)
+- [Video Detection Workspace](docs/video-detection-workspace.md)
+- [Phase 08 validation results](docs/phase-08-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

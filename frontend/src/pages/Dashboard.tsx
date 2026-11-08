@@ -82,7 +82,7 @@ export function Dashboard({
         aside={
           <span className="phase-pill">
             <span />
-            Phase 07 · Dashboard
+            Phase 08 · Detection workspace
           </span>
         }
       />
@@ -104,9 +104,12 @@ export function Dashboard({
             catalog.
           </p>
           <div className="hero-actions">
-            <Link to="/history" className="button-primary">
-              View detection history
+            <Link to="/detection" className="button-primary">
+              Start a detection
               <Icon name="arrow" size={17} />
+            </Link>
+            <Link to="/history" className="button-secondary">
+              View detection history
             </Link>
             <Link to="/models" className="button-secondary">
               Browse models
