@@ -12,11 +12,12 @@ from app.schemas.detection import DetectionRequest, SourceType
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Explicit CPU/GPU YOLO26s smoke test; may download weights")
+    parser = argparse.ArgumentParser(description="Explicit CPU/GPU real-model smoke test; may download the selected weights")
     parser.add_argument("--duration", type=float, default=3)
     parser.add_argument("--fps", type=int, default=12)
     parser.add_argument("--imgsz", type=int, default=320)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda:0"), default="cpu")
+    parser.add_argument("--model", default="yolo26s", help="Approved detection model key")
     parser.add_argument("--fixture-image", type=Path, help="Optional developer-owned local image to repeat as video")
     args = parser.parse_args(argv)
     if not 2 <= args.duration <= 5 or not 1 <= args.fps <= 30 or args.imgsz <= 0:
@@ -59,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         runtime_settings = settings.model_copy(update={"local_input_dir": Path(fixture)})
         result = DetectionPipeline(runtime_settings).process_video(DetectionRequest(
             source=str(source), source_type=SourceType.LOCAL_FILE,
-            model_key="yolo26s", device=args.device, image_size=args.imgsz,
+            model_key=args.model, device=args.device, image_size=args.imgsz,
         ))
     probe = subprocess.run([
         settings.ffprobe_path, "-v", "error", "-show_streams", "-show_format", "-of", "json",
@@ -86,9 +87,13 @@ def main(argv: list[str] | None = None) -> int:
     assert not any(stream["codec_type"] == "audio" for stream in streams)
     assert decoded_frames == expected_frames == result.statistics.total_frames_processed
     assert metadata["statistics"]["totalFramesProcessed"] == expected_frames
+    assert metadata["modelKey"] == metadata["statistics"]["modelKey"] == args.model
+    assert metadata["weightsFilename"] == f"{args.model}.pt"
     assert result.output.video_path.stat().st_size > 0
     report = {
         "modelKey": result.model_key,
+        "modelVersion": result.model_version,
+        "weightsFilename": result.weights_filename,
         "device": result.device,
         "inputDurationSeconds": expected_frames / args.fps,
         "inputFixture": "bundled/local image" if image is not None else "generated geometric pattern",

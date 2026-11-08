@@ -46,8 +46,13 @@ For an authorized single YouTube video, use `--source-type youtube` with a suppo
 # Explicit real inference smoke test; first run may download YOLO26s weights.
 .\.venv\Scripts\python.exe -m app.smoke
 
-# Optional explicit preparation without video processing.
-.\.venv\Scripts\python.exe -m app.cli prepare-model --model yolo26s --device cpu
+# Model registry, cache status (no downloads), and explicit preparation.
+.\.venv\Scripts\python.exe -m app.cli models list
+.\.venv\Scripts\python.exe -m app.cli models status
+.\.venv\Scripts\python.exe -m app.cli models prepare --model yolo11n --device cpu
+
+# Smoke test with another approved model.
+.\.venv\Scripts\python.exe -m app.smoke --model yolo11n
 ```
 
 The smoke command generates a very short deterministic video, runs real inference, encodes H.264 MP4 without audio, verifies the output, and writes measured JSON statistics. Synthetic frames may legitimately produce zero detections; this is not replaced with fabricated counts.

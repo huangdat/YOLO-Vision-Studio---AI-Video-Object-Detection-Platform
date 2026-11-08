@@ -96,7 +96,7 @@ class SystemApiIntegrationTest {
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
         assertThat(flyway.info().applied()).hasSize(1);
         assertThat(flyway.info().all()).extracting(migration -> migration.getVersion().getVersion())
-                .containsExactly("1", "2", "3", "4", "5");
+                .containsExactly("1", "2", "3", "4", "5", "6");
         assertThat(flyway.info().all())
                 .filteredOn(migration -> !migration.getVersion().getVersion().equals("1"))
                 .extracting(migration -> migration.getState())

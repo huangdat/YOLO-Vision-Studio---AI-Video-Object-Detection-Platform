@@ -30,7 +30,11 @@ The engine provides typed source requests, bounded local/YouTube input handling,
 
 The normal test suite uses fake models and mocked downloads. Real inference, output decoding, Docker startup, and live YouTube downloads must each be reported according to actual execution. See [ai-detection-engine.md](ai-detection-engine.md) for setup and testing, and [phase-03-validation.md](phase-03-validation.md) for the executed CPU smoke test, CLI run, and media verification. The database model remains disabled; no queue integration, detection API, frontend form, MinIO transfer, tracking, or unique-vehicle counting is included.
 
-Phase 04 is YOLO Model Management. RabbitMQ integration follows in Phase 05, and Spring Boot detection APIs follow in Phase 06.
+## Phase 04 progress
+
+The catalog registers 20 pretrained detection checkpoints (YOLOv8, YOLO11, YOLO12, YOLO26 × n/s/m/l/x) through Flyway V6, all disabled. It serves them through read-only Spring Boot APIs and lets the engine select any approved key. Explicit worker commands list, inspect, and prepare models, and a verification record is written only after a successful load. See [yolo-model-management.md](yolo-model-management.md) and [phase-04-validation.md](phase-04-validation.md). Enablement remains an administrator database action, and no preparation endpoint is exposed.
+
+Phase 05 is RabbitMQ asynchronous detection job processing, followed by Spring Boot detection APIs in Phase 06.
 
 ## Phase 1 boundaries
 

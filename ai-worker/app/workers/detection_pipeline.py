@@ -15,6 +15,7 @@ from app.core.exceptions import DetectionEngineError, InvalidVideoSourceError, V
 from app.schemas.detection import DEFAULT_VEHICLE_CLASSES, DetectionRequest, SourceType
 from app.schemas.progress import ProgressCallback, ProgressEvent, ProgressReporter, ProgressStage
 from app.schemas.video import DetectionResult, InputVideoMetadata, VideoOutput
+from app.services.model_registry import get_model_spec
 
 logger = logging.getLogger(__name__)
 
@@ -108,10 +109,16 @@ class DetectionPipeline:
                         raise VideoProcessingError("The encoder did not produce a nonempty output video")
                     duration_ms = max(0, round((perf_counter() - started) * 1000))
                     statistics = processed.statistics.model_copy(update={"processing_time_ms": duration_ms})
+                    # Describe the model that was actually loaded, not merely the one requested.
+                    spec = get_model_spec(statistics.model_key)
+                    if spec is None:
+                        raise VideoProcessingError("The loaded model is not in the approved registry")
                     result = DetectionResult(
                         execution_id=execution_id,
-                        model_key=statistics.model_key,
-                        weights_filename=f"{statistics.model_key}.pt",
+                        model_key=spec.model_key,
+                        model_version=spec.version,
+                        model_size=spec.model_size,
+                        weights_filename=spec.weights_filename,
                         device=statistics.device,
                         input=InputVideoMetadata(
                             **processed.metadata.model_dump(), source_type=request.source_type

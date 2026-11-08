@@ -8,7 +8,9 @@ Phase 02 adds the PostgreSQL schema, Flyway migrations, JPA entities, repositori
 
 Phase 03 adds an independent Python CLI/library for local video and authorized YouTube inputs, streaming YOLO26s inference, bounding-box annotations, cumulative detection statistics, progress callbacks, H.264 MP4 export, and JSON results. CPU inference is the default container setup; model weights load only after explicit processing or preparation. See the [AI engine guide](docs/ai-detection-engine.md) for optional dependency installation, FFmpeg setup, CLI commands, and the explicit real inference smoke test.
 
-The browser Detection, History, and Models pages remain placeholders. Model management, RabbitMQ execution, Spring Boot detection APIs, authentication, and object storage transfer belong to later phases.
+Phase 04 adds multi-version model management: a PostgreSQL catalog of 20 pretrained detection checkpoints (YOLOv8, YOLO11, YOLO12, and YOLO26; sizes n/s/m/l/x), read-only `GET /api/v1/models`, `/api/v1/models/versions`, and `/api/v1/models/{modelKey}` APIs, dynamic model selection in the Python engine, and explicit worker commands to list, inspect, and prepare models. Every model starts disabled. Catalog enablement, worker cache presence, and runtime verification are reported separately. See the [model management guide](docs/yolo-model-management.md).
+
+The browser Detection, History, and Models pages remain placeholders. RabbitMQ execution, Spring Boot detection job APIs, authentication, and object storage transfer belong to later phases.
 
 ## Project structure
 
@@ -62,6 +64,7 @@ The initial build downloads dependencies, installs CPU inference packages in the
 | --- | --- | --- |
 | Frontend | http://localhost:5173 | Dashboard |
 | Backend | http://localhost:8080/api/v1/system/info | System information |
+| Backend | http://localhost:8080/api/v1/models | Read-only YOLO model catalog |
 | Backend Actuator | http://localhost:8080/actuator/health | Dependency health |
 | AI worker | http://localhost:8000/health | Worker HTTP liveness |
 | PostgreSQL | `localhost:5432` | Metadata database |
@@ -116,6 +119,8 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Development environment, configuration, startup, and validation](docs/development.md)
 - [Development phases](docs/roadmap.md)
 - [Phase 03 validation results](docs/phase-03-validation.md)
+- [YOLO model management](docs/yolo-model-management.md)
+- [Phase 04 validation results](docs/phase-04-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

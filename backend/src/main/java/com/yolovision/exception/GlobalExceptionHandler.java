@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -32,6 +33,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
         problem.setProperty("errors", errors);
         return handleExceptionInternal(exception, problem, headers, status, request);
+    }
+
+    @ExceptionHandler(ModelNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleModelNotFound(ModelNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Model not found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ProblemDetail> handleDataAccessFailure(DataAccessException exception) {
+        LOG.error("Database access failed while serving an API request", exception);
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE, "The data store is temporarily unavailable.");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
     }
 
     @ExceptionHandler(Exception.class)

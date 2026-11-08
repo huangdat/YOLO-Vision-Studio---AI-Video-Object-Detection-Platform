@@ -42,7 +42,7 @@ The pipeline validates the request and permitted paths, creates a unique workspa
 
 ## Model loading and devices
 
-Only `yolo26s` / official `yolo26s.pt` detection weights are supported in this phase. Arbitrary user-supplied model files and filesystem paths are rejected. A model cache avoids reloading a previously loaded model for the same cache location and actual device. The inference path serializes access to a shared model as required by Ultralytics' mutable predictor state.
+Since Phase 04, any of the 20 approved detection keys in `app/services/model_registry.py` can be selected, for example `yolov8n` → `yolov8n.pt` or `yolo26s` → `yolo26s.pt`. The default remains `yolo26s`. Arbitrary user-supplied model files, filesystem paths, and non-detection checkpoints are rejected. See [yolo-model-management.md](yolo-model-management.md) for the registry, cache status, and preparation workflow. A model cache avoids reloading a previously loaded model for the same cache location and actual device. The inference path serializes access to a shared model as required by Ultralytics' mutable predictor state.
 
 Heavy packages and model objects are not loaded during module import or FastAPI startup. Weights may download only after explicit inference or an explicit model preparation command. Cached weights are reused and never committed.
 
@@ -134,7 +134,7 @@ $env:AI_DEVICE = 'cpu'
 
 Use `--output 'outputs/result.mp4'` to request an allowed explicit destination, or omit it for an automatically unique directory. Use `python -m app.cli --help` and `python -m app.cli detect --help` for the actual supported arguments. The CLI returns nonzero when source validation, downloading, model loading, inference, or encoding fails.
 
-`python -m app.cli prepare-model --model yolo26s --device cpu` explicitly prepares official weights without processing a video. It may download weights and is never run automatically by health startup or the normal test suite.
+`python -m app.cli models prepare --model yolo26s --device cpu` (or the original `prepare-model` alias) explicitly prepares official weights without processing a video. `models list` and `models status` inspect the registry and cache without loading or downloading anything. It may download weights and is never run automatically by health startup or the normal test suite.
 
 For an authorized YouTube source, replace the source options with `--source 'https://www.youtube.com/watch?v=<video-id>' --source-type youtube`. The placeholder must be replaced by an actual authorized video; this documentation does not imply that a live download was tested.
 
@@ -243,7 +243,7 @@ Resources and owned temporary files are released on errors and interruption. Sou
 
 ## Future integration and licensing
 
-Phase 04 adds model management; it can extend the model-loading boundary without replacing detection processing. Phase 05 can call `DetectionPipeline` from a RabbitMQ consumer and translate the same progress/result contracts into messages. Phase 06 adds Spring Boot detection APIs. Broker acknowledgements, retries, job persistence, storage transfer, and public authorization belong to those future integrations.
+Phase 04 added model management by extending the model-loading boundary, without replacing detection processing. Phase 05 can call `DetectionPipeline` from a RabbitMQ consumer and translate the same progress/result contracts into messages. Phase 06 adds Spring Boot detection APIs. Broker acknowledgements, retries, job persistence, storage transfer, and public authorization belong to those future integrations.
 
 The PostgreSQL `yolo26s` metadata stays disabled in Phase 03. Local CLI model support does not automatically advertise application availability. No tracking or unique-object counting is implemented.
 

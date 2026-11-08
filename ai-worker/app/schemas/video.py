@@ -39,6 +39,8 @@ class VideoOutput(EngineSchema):
 class DetectionResult(EngineSchema):
     execution_id: UUID
     model_key: str
+    model_version: str
+    model_size: str
     weights_filename: str
     device: str
     status: Literal["COMPLETED"] = "COMPLETED"

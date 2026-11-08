@@ -146,6 +146,7 @@ All production migrations are in `backend/src/main/resources/db/migration/`:
 | `V3__create_detection_jobs.sql` | Job table, model reference, constraints, and query indexes |
 | `V4__create_detection_results.sql` | Result table, owning job reference, uniqueness, and statistics metadata |
 | `V5__seed_initial_model_configs.sql` | Disabled `yolo26s` metadata |
+| `V6__seed_yolo_detection_model_catalog.sql` | The 20 approved detection checkpoints (YOLOv8, YOLO11, YOLO12, YOLO26 × n/s/m/l/x), all disabled, inserted with `ON CONFLICT (model_key) DO NOTHING` so existing rows are preserved ([details](yolo-model-management.md#4-postgresql-catalog)) |
 
 Flyway applies migrations once in version order and records checksums in `flyway_schema_history`. Do not edit migrations that may have run in an existing environment. Add a later migration for schema or seed changes. The seed runs through Flyway, never through application startup code.
 
@@ -234,9 +235,9 @@ Run these commands from `backend/`:
 
 On macOS/Linux, replace `.\mvnw.cmd` with `./mvnw`.
 
-The fast `test` profile is under test resources only. It uses an isolated H2 database in PostgreSQL compatibility mode, targets Flyway at the unchanged V1 foundation, and allows Hibernate to create/drop the entity mapping schema for this test database. It explicitly does not execute PostgreSQL migrations V2-V5. Fast tests verify repository behavior, JSON mapping, entity relationships, validation, timestamps, API compatibility, and the H2-generated constraints. They do not prove PostgreSQL compatibility or production schema correctness.
+The fast `test` profile is under test resources only. It uses an isolated H2 database in PostgreSQL compatibility mode, targets Flyway at the unchanged V1 foundation, and allows Hibernate to create/drop the entity mapping schema for this test database. It explicitly does not execute PostgreSQL migrations V2-V6. Fast tests verify repository behavior, JSON mapping, entity relationships, validation, timestamps, API compatibility, and the H2-generated constraints. They do not prove PostgreSQL compatibility or production schema correctness.
 
-The `postgres-it` Maven profile runs the PostgreSQL integration suite using Testcontainers PostgreSQL 17. The suite creates its own ephemeral database on a dynamically assigned port, applies the real production migrations V1-V5, validates the schema through Hibernate, and tests JSONB persistence, relationships, queries, defaults, and PostgreSQL constraints. It does not use `.env` credentials or the unrelated database on localhost:5432. The Docker daemon must be running; first use may download container images.
+The `postgres-it` Maven profile runs the PostgreSQL integration suite using Testcontainers PostgreSQL 17. The suite creates its own ephemeral database on a dynamically assigned port, applies the real production migrations V1-V6, verifies the 20-model catalog and V5→V6 upgrade preservation, validates the schema through Hibernate, and tests JSONB persistence, relationships, queries, defaults, and PostgreSQL constraints. It does not use `.env` credentials or the unrelated database on localhost:5432. The Docker daemon must be running; first use may download container images.
 
 An explicitly requested PostgreSQL test run fails when its required Docker infrastructure cannot be used. If Docker is unavailable, run the fast tests, report PostgreSQL integration validation as **NOT RUN**, and retain the command above for later execution. Never count unexecuted integration tests as passed. A successful Compose configuration check alone proves neither migration compatibility nor container startup.
 

@@ -208,3 +208,34 @@ def test_progress_is_clamped_until_completion_and_never_regresses():
     reporter.emit(ProgressEvent(stage=ProgressStage.ENCODING, progress=85, processed_frames=2))
     assert [event.progress for event in events] == [99, 99]
     assert [event.processed_frames for event in events] == [3, 3]
+
+
+@pytest.mark.parametrize("model_key, version, size", [
+    ("yolov8n", "YOLOv8", "n"), ("yolo11s", "YOLO11", "s"), ("yolo12m", "YOLO12", "m"), ("yolo26s", "YOLO26", "s"),
+])
+def test_result_json_identifies_the_loaded_model(setup_pipeline, model_key, version, size):
+    _, source, processor, pipeline = setup_pipeline
+
+    result = pipeline.process_video(local(source, model_key=model_key))
+
+    payload = json.loads(result.output.metadata_path.read_text())
+    assert processor.requests[0].model_key == model_key
+    assert payload["modelKey"] == payload["statistics"]["modelKey"] == model_key
+    assert payload["modelVersion"] == version and payload["modelSize"] == size
+    assert payload["weightsFilename"] == f"{model_key}.pt"
+
+
+def test_result_metadata_reports_the_actually_loaded_model_not_the_request(setup_pipeline):
+    _, source, processor, pipeline = setup_pipeline
+    original = processor.process
+
+    def loaded_other_model(video_path, output_path, request, on_progress=None):
+        result = original(video_path, output_path, request, on_progress)
+        return result.model_copy(update={
+            "statistics": result.statistics.model_copy(update={"model_key": "yolo11n"})
+        })
+
+    processor.process = loaded_other_model
+    result = pipeline.process_video(local(source, model_key="yolov8n"))
+
+    assert result.model_key == "yolo11n" and result.weights_filename == "yolo11n.pt"

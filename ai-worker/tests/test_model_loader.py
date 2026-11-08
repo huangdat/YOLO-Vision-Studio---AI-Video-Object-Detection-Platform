@@ -38,7 +38,10 @@ def test_loads_only_the_supported_weights_into_the_configured_cache(model_enviro
     assert loaded.device == "cpu"
 
 
-@pytest.mark.parametrize("identifier", ["../other.pt", "https://example.com/model.pt", "yolo11s", "yolo26s.pt"])
+@pytest.mark.parametrize("identifier", [
+    "../other.pt", "https://example.com/model.pt", "yolo26s.pt", "yolov5s", "yolo26s-seg",
+    "yolo11s-pose", "YOLO11S", "C:\\models\\yolo11s.pt", "/tmp/yolo11s.pt", "",
+])
 def test_rejects_unsupported_or_filesystem_model_identifiers(model_environment, identifier: str) -> None:
     settings, _, factory, _ = model_environment
 
@@ -114,3 +117,91 @@ def test_missing_native_pytorch_runtime_has_a_meaningful_error(model_environment
         ModelLoader(settings).load(device="cpu")
 
     assert isinstance(failure.value.__cause__, OSError)
+
+
+@pytest.mark.parametrize("model_key", ["yolov8n", "yolo11m", "yolo12l", "yolo26x", "yolo26s"])
+def test_loads_each_family_from_its_own_official_checkpoint(model_environment, model_key: str) -> None:
+    settings, _, factory, _ = model_environment
+
+    loaded = ModelLoader(settings).load(model_key, "cpu")
+
+    factory.assert_called_once_with(str(settings.model_cache_dir.resolve() / f"{model_key}.pt"))
+    assert loaded.model_key == model_key
+
+
+def test_cache_is_keyed_by_model_so_different_models_do_not_collide(model_environment) -> None:
+    settings, _, factory, _ = model_environment
+    factory.side_effect = lambda path: SimpleNamespace(names={0: Path(path).stem}, to=Mock())
+
+    first = ModelLoader(settings).load("yolov8n", "cpu")
+    second = ModelLoader(settings).load("yolo11n", "cpu")
+
+    assert first is not second
+    assert first.names == {0: "yolov8n"} and second.names == {0: "yolo11n"}
+    assert ModelLoader(settings).load("yolov8n", "cpu") is first
+    assert factory.call_count == 2
+
+
+def test_model_provided_class_metadata_is_kept_for_non_coco_class_sets(model_environment) -> None:
+    settings, _, _, model = model_environment
+    model.names = ["helmet", "vest", "cone"]
+
+    assert ModelLoader(settings).load("yolo11n", "cpu").names == {0: "helmet", 1: "vest", 2: "cone"}
+
+
+@pytest.mark.parametrize("task", ["segment", "pose", "classify", "obb"])
+def test_rejects_a_checkpoint_whose_task_is_not_detection(model_environment, task: str) -> None:
+    settings, _, _, model = model_environment
+    model.task = task
+
+    with pytest.raises(ModelLoadingError, match="only detection models"):
+        ModelLoader(settings).load("yolov8n", "cpu")
+
+    assert not ModelLoader._cache
+
+
+def test_successful_load_of_cached_weights_records_verification(model_environment) -> None:
+    from app.services.model_registry import CacheStatus, get_model_spec, inspect_model
+
+    settings, _, _, model = model_environment
+    model.task = "detect"
+    cache = settings.model_cache_dir
+    cache.mkdir(parents=True)
+    (cache / "yolov8n.pt").write_bytes(b"checkpoint")
+    assert inspect_model(cache, get_model_spec("yolov8n")).status == CacheStatus.CACHED_UNVERIFIED
+
+    ModelLoader(settings).load("yolov8n", "cpu", allow_download=False)
+
+    status = inspect_model(cache, get_model_spec("yolov8n"))
+    assert status.status == CacheStatus.VERIFIED
+    assert status.verified_device == "cpu"
+
+
+def test_failed_load_of_corrupt_cached_weights_is_not_verified_or_deleted(model_environment) -> None:
+    from app.services.model_registry import CacheStatus, get_model_spec, inspect_model
+
+    settings, _, factory, _ = model_environment
+    factory.side_effect = RuntimeError("invalid load key")
+    cache = settings.model_cache_dir
+    cache.mkdir(parents=True)
+    (cache / "yolo12n.pt").write_bytes(b"corrupt")
+
+    with pytest.raises(ModelLoadingError, match="yolo12n.pt could not be loaded"):
+        ModelLoader(settings).load("yolo12n", "cpu", allow_download=False)
+
+    assert (cache / "yolo12n.pt").read_bytes() == b"corrupt"
+    assert inspect_model(cache, get_model_spec("yolo12n")).status == CacheStatus.CACHED_UNVERIFIED
+
+
+def test_missing_weights_with_downloads_disabled_names_the_checkpoint(model_environment) -> None:
+    settings, _, factory, _ = model_environment
+
+    with pytest.raises(ModelLoadingError, match="yolo11s.pt is not cached"):
+        ModelLoader(settings).load("yolo11s", "cpu", allow_download=False)
+
+    factory.assert_not_called()
+
+
+def test_registry_derived_mapping_preserves_the_phase_03_yolo26s_entry() -> None:
+    assert ModelLoader.SUPPORTED_MODELS["yolo26s"] == "yolo26s.pt"
+    assert len(ModelLoader.SUPPORTED_MODELS) == 20

@@ -31,9 +31,9 @@ The frontend communicates only with Spring Boot. Python inference must never run
 
 ## Backend
 
-`com.yolovision` contains `controller`, `service`, `repository`, `entity`, `dto`, `config`, and `exception` packages. Controllers expose DTOs; services provide behavior through constructor injection. Phase 02 adds `ModelConfig`, `DetectionJob`, and `DetectionResult` entities, Spring Data repositories, string-based job statuses, and record response DTO foundations. No detection controller or processing service is introduced.
+`com.yolovision` contains `controller`, `service`, `repository`, `entity`, `dto`, `config`, and `exception` packages. Controllers expose DTOs; services provide behavior through constructor injection. Phase 02 adds `ModelConfig`, `DetectionJob`, and `DetectionResult` entities, Spring Data repositories, string-based job statuses, and record response DTO foundations. No detection controller or processing service is introduced. Phase 04 adds the read-only `ModelController` and `ModelCatalogService` for the model catalog.
 
-Spring Boot configures PostgreSQL, RabbitMQ, Flyway, health probes, and CORS from environment variables. Hibernate validates production schemas instead of modifying them. The unchanged V1 foundation is followed by V2-V5 migrations for model metadata, jobs, results, and the disabled `yolo26s` seed. Jobs reference models restrictively; results reference one owning job and are removed with its metadata when the job is deleted. UUIDs, TIMESTAMPTZ, JSONB, relational constraints, and indexes support future processing without executing it. See [database-design.md](database-design.md) for the ER diagram, columns, query methods, and separate H2/PostgreSQL test strategies.
+Spring Boot configures PostgreSQL, RabbitMQ, Flyway, health probes, and CORS from environment variables. Hibernate validates production schemas instead of modifying them. The unchanged V1 foundation is followed by V2-V5 migrations for model metadata, jobs, results, and the disabled `yolo26s` seed. V6 registers the remaining approved detection checkpoints, all disabled, without modifying existing rows. Jobs reference models restrictively; results reference one owning job and are removed with its metadata when the job is deleted. UUIDs, TIMESTAMPTZ, JSONB, relational constraints, and indexes support future processing without executing it. See [database-design.md](database-design.md) for the ER diagram, columns, query methods, and separate H2/PostgreSQL test strategies.
 
 The global exception handler returns HTTP Problem Details and validation information without exposing internal exception messages or stack traces. Actuator exposes `health` and `info`; health details are hidden. Liveness indicates the application process is running. Readiness includes database and RabbitMQ availability, so dependency outages can produce a non-success health response even while the system information endpoint still responds.
 
@@ -50,6 +50,8 @@ The API client defaults to `/api/v1`. Vite proxies `/api` to Spring Boot, keepin
 The worker uses FastAPI with API, services, workers, config, and schemas packages. Pydantic validates process settings. `python -m app` starts Uvicorn with the configured host, port, and JSON logging. Startup does not require PostgreSQL, RabbitMQ, MinIO, CUDA, model weights, or the optional AI Python dependencies.
 
 Phase 03 adds `DetectionPipeline`, lazy cached YOLO26s loading, streamed frame inference, progress callbacks, bounded source handling, FFmpeg export, and JSON statistics. The library and CLI run independently of FastAPI and a broker. Counts describe bounding-box detection events across frames, not unique objects. Database model availability is not changed by local CLI support. See [ai-detection-engine.md](ai-detection-engine.md) for module boundaries and configuration.
+
+Phase 04 replaces the single-model allowlist with `model_registry.py`, which lists the 20 approved detection checkpoints. Consistency tests keep it equal to the Flyway catalog. The worker reports cache and verification status per runtime through its CLI. PostgreSQL remains authoritative for catalog membership and enablement. See [yolo-model-management.md](yolo-model-management.md).
 
 `/health` verifies that the worker HTTP process can serve requests. It does not claim that model weights, queue consumers, or an inference execution are ready. There is no public synchronous inference endpoint.
 
@@ -75,7 +77,9 @@ Phase 03 adds `DetectionPipeline`, lazy cached YOLO26s loading, streamed frame i
 }
 ```
 
-The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Business APIs, SSE progress events, messaging schemas, and video object contracts belong to later phases.
+Read-only model catalog, served by Spring Boot from PostgreSQL (works while the worker is offline): `GET /api/v1/models` (optional `version`, `size`, `enabled` filters), `GET /api/v1/models/versions`, and `GET /api/v1/models/{modelKey}`. See [yolo-model-management.md](yolo-model-management.md#5-spring-boot-rest-api-read-only) for response shapes and errors.
+
+The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Detection job APIs, SSE progress events, messaging schemas, and video object contracts belong to later phases.
 
 ## Deployment and persistence
 

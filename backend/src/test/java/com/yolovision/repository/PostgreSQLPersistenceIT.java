@@ -26,6 +26,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /** Executes real production migrations and database checks on disposable PostgreSQL 17. */
@@ -51,8 +53,8 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
     @Test
     void productionMigrationsValidateAndRerunningDoesNotReapplySeeds() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
-        assertThat(flyway.info().applied()).hasSize(5);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
+        assertThat(flyway.info().applied()).hasSize(6);
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -71,6 +73,79 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
         assertThat(model.getWeightsFilename()).isEqualTo("yolo26s.pt");
         assertThat(model.isEnabled()).isFalse();
         assertThat(models.findByEnabledTrueOrderByModelKeyAsc()).doesNotContain(model);
+    }
+
+    @Test
+    void catalogMigrationRegistersExactlyTheTwentyApprovedDetectionModelsDisabled() {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT model_key, version, model_size, task_type, weights_filename, enabled
+                FROM model_configs ORDER BY model_key
+                """);
+        Map<String, String> versions = Map.of(
+                "yolov8", "YOLOv8", "yolo11", "YOLO11", "yolo12", "YOLO12", "yolo26", "YOLO26");
+
+        assertThat(rows).hasSize(20);
+        assertThat(rows).extracting(row -> row.get("model_key")).doesNotHaveDuplicates();
+        for (String prefix : versions.keySet()) {
+            for (String size : List.of("n", "s", "m", "l", "x")) {
+                String key = prefix + size;
+                assertThat(rows).as(key).anySatisfy(row -> {
+                    assertThat(row.get("model_key")).isEqualTo(key);
+                    assertThat(row.get("version")).isEqualTo(versions.get(prefix));
+                    assertThat(row.get("model_size")).isEqualTo(size);
+                    assertThat(row.get("task_type")).isEqualTo("DETECT");
+                    assertThat(row.get("weights_filename")).isEqualTo(key + ".pt");
+                    assertThat(row.get("enabled")).isEqualTo(false);
+                });
+            }
+        }
+        assertThat(models.findByEnabledTrueOrderByModelKeyAsc()).isEmpty();
+    }
+
+    @Test
+    // Runs outside the per-test transaction: uncommitted setup rows would hold locks
+    // that the migration's separate Flyway connection waits on indefinitely.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void catalogMigrationPreservesExistingRowsAdministratorChangesAndForeignKeys() {
+        String schema = "phase04_upgrade_" + UUID.randomUUID().toString().replace("-", "");
+        try {
+            upgradeFromV5AndVerifyPreservation(schema);
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    private void upgradeFromV5AndVerifyPreservation(String schema) {
+        Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .schemas(schema).createSchemas(true).target("5").load().migrate();
+        UUID yolo26sId = jdbc.queryForObject(
+                "UPDATE " + schema + ".model_configs SET enabled = TRUE, updated_at = TIMESTAMPTZ "
+                        + "'2026-01-02 03:04:05+00' WHERE model_key = 'yolo26s' RETURNING id", UUID.class);
+        UUID jobId = jdbc.queryForObject("INSERT INTO " + schema + ".detection_jobs "
+                + "(model_id, video_url, confidence, image_size, selected_classes) "
+                + "VALUES (?, 'https://example.com/video', 0.250, 960, '[2]'::jsonb) RETURNING id",
+                UUID.class, yolo26sId);
+        jdbc.update("INSERT INTO " + schema + ".model_configs "
+                + "(model_key, version, model_size, task_type, weights_filename, enabled) "
+                + "VALUES ('yolov8n', 'YOLOv8', 'n', 'DETECT', 'yolov8n.pt', TRUE)");
+
+        int executed = Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .schemas(schema).load().migrate().migrationsExecuted;
+
+        assertThat(executed).isEqualTo(1);
+        Map<String, Object> yolo26s = jdbc.queryForMap("SELECT id, enabled, updated_at FROM " + schema
+                + ".model_configs WHERE model_key = 'yolo26s'");
+        assertThat(yolo26s.get("id")).isEqualTo(yolo26sId);
+        assertThat(yolo26s.get("enabled")).isEqualTo(true);
+        assertThat(yolo26s.get("updated_at").toString()).startsWith("2026-01-02");
+        assertThat(jdbc.queryForObject("SELECT model_id FROM " + schema + ".detection_jobs WHERE id = ?",
+                UUID.class, jobId)).isEqualTo(yolo26sId);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM " + schema + ".model_configs", Long.class))
+                .isEqualTo(20L);
+        assertThat(jdbc.queryForList("SELECT model_key FROM " + schema
+                + ".model_configs WHERE enabled ORDER BY model_key", String.class))
+                .containsExactly("yolo26s", "yolov8n");
     }
 
     @Test
