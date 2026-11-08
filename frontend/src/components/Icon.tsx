@@ -15,7 +15,12 @@ export type IconName =
   | "close"
   | "code"
   | "check"
-  | "external";
+  | "external"
+  | "alert"
+  | "chevronLeft"
+  | "chevronRight"
+  | "activity"
+  | "film";
 
 const paths: Record<IconName, React.ReactNode> = {
   vision: (
@@ -77,6 +82,21 @@ const paths: Record<IconName, React.ReactNode> = {
   check: <path d="m5 12 4 4L19 6" />,
   external: (
     <path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" />
+  ),
+  alert: (
+    <>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4m0 4h.01" />
+    </>
+  ),
+  chevronLeft: <path d="m15 18-6-6 6-6" />,
+  chevronRight: <path d="m9 18 6-6-6-6" />,
+  activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  film: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M7 3v18M17 3v18M3 7.5h4m10 0h4M3 12h18M3 16.5h4m10 0h4" />
+    </>
   ),
 };
 

@@ -57,7 +57,18 @@ Phase 06 adds the detection REST APIs on top of the Phase 05 submission service 
 
 No migration was needed. The API is unauthenticated and development-only. See [detection-rest-api.md](detection-rest-api.md) and [phase-06-validation.md](phase-06-validation.md).
 
-Phase 07 integrates the React dashboard with these APIs.
+## Phase 07 progress
+
+The React dashboard now uses the real APIs:
+
+- **Dashboard:** KPI counts taken from pagination metadata, recent activity, and model families.
+- **Models:** the catalog with server-side filters and a details view.
+- **History:** paged, filtered history.
+- **Job details:** live progress through `EventSource` with a conservative polling fallback, plus result statistics labelled as frame detection events.
+
+All pages have consistent loading, empty, and error states. See [frontend-dashboard.md](frontend-dashboard.md) and [phase-07-validation.md](phase-07-validation.md).
+
+Phase 08 adds the Detection Workspace (job submission); Phase 09 adds video preview and download.
 
 ## Phase 1 boundaries
 

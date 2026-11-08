@@ -27,9 +27,8 @@ export function Placeholder({
         <span className="hero-kicker">COMING IN A FUTURE PHASE</span>
         <h2>A little further on the roadmap.</h2>
         <p>
-          This workspace is reserved for {title.toLowerCase()}. Phase 1
-          establishes the platform and service connections; this feature is not
-          available yet.
+          This workspace is reserved for {title.toLowerCase()}. It arrives in a
+          later phase; this feature is not available yet.
         </p>
         <Link to="/" className="button-primary">
           Back to dashboard

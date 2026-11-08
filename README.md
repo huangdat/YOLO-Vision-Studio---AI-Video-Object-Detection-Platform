@@ -14,7 +14,14 @@ Phase 05 adds asynchronous job processing. Spring Boot validates a detection job
 
 Phase 06 exposes the pipeline over REST. You submit a YouTube video with `POST /api/v1/detections` (202 Accepted, through the transactional outbox). You read job state, paged history, and result metadata from the other `/api/v1/detections` endpoints, and follow live progress through Server-Sent Events at `/api/v1/detections/{jobId}/events`. OpenAPI and Swagger UI are served at `/api/v1/openapi` and `/api/v1/docs`. **The API has no authentication yet and is for local development only.** See the [detection REST API guide](docs/detection-rest-api.md).
 
-The browser Detection, History, and Models pages remain placeholders (Phase 07). Authentication and video download links belong to later phases.
+Phase 07 connects the React dashboard to these APIs:
+
+- **Dashboard:** real job and model statistics.
+- **History:** paged and filtered job history.
+- **Models:** the model catalog with server-side filters.
+- **Job details:** live progress over SSE with a polling fallback, plus measured result statistics.
+
+All pages handle loading, empty, and error states. See the [frontend dashboard guide](docs/frontend-dashboard.md). The Detection submission workspace (Phase 08), authentication, and video preview/download (Phase 09) remain future work.
 
 ## Project structure
 
@@ -132,6 +139,8 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Phase 05 validation results](docs/phase-05-validation.md)
 - [Detection REST API and SSE](docs/detection-rest-api.md)
 - [Phase 06 validation results](docs/phase-06-validation.md)
+- [Frontend dashboard and API integration](docs/frontend-dashboard.md)
+- [Phase 07 validation results](docs/phase-07-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

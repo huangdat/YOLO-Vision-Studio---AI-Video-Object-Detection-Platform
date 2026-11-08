@@ -1,10 +1,13 @@
 import { useState } from "react";
-import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { Link, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBadge } from "./components/StatusBadge";
 import { useBackendStatus } from "./hooks/useBackendStatus";
 import { Dashboard } from "./pages/Dashboard";
+import { DetectionDetails } from "./pages/DetectionDetails";
+import { History } from "./pages/History";
+import { Models } from "./pages/Models";
 import { Placeholder } from "./pages/Placeholder";
 
 export function App() {
@@ -19,7 +22,10 @@ export function App() {
         "/history": "History",
         "/models": "Models",
       } as Record<string, string>
-    )[location.pathname] || "Page not found";
+    )[location.pathname] ||
+    (matchPath("/detections/:jobId", location.pathname)
+      ? "Detection job"
+      : "Page not found");
 
   return (
     <div className="app-shell">
@@ -70,26 +76,9 @@ export function App() {
                 />
               }
             />
-            <Route
-              path="/history"
-              element={
-                <Placeholder
-                  title="History"
-                  description="Your future library of detection runs and processed videos."
-                  icon="history"
-                />
-              }
-            />
-            <Route
-              path="/models"
-              element={
-                <Placeholder
-                  title="Models"
-                  description="Your future catalog of YOLO model versions and sizes."
-                  icon="models"
-                />
-              }
-            />
+            <Route path="/history" element={<History />} />
+            <Route path="/detections/:jobId" element={<DetectionDetails />} />
+            <Route path="/models" element={<Models />} />
             <Route
               path="*"
               element={

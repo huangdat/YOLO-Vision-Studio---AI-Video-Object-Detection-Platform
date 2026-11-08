@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 
 const navigation: {
@@ -9,11 +9,12 @@ const navigation: {
 }[] = [
   { to: "/", label: "Dashboard", icon: "dashboard" },
   { to: "/detection", label: "Detection", icon: "scan", soon: true },
-  { to: "/history", label: "History", icon: "history", soon: true },
-  { to: "/models", label: "Models", icon: "models", soon: true },
+  { to: "/history", label: "History", icon: "history" },
+  { to: "/models", label: "Models", icon: "models" },
 ];
 
 export function Sidebar({ open, close }: { open: boolean; close: () => void }) {
+  const onJobPage = useLocation().pathname.startsWith("/detections/");
   return (
     <>
       {open && (
@@ -52,7 +53,7 @@ export function Sidebar({ open, close }: { open: boolean; close: () => void }) {
               end={item.to === "/"}
               onClick={close}
               className={({ isActive }) =>
-                `nav-link ${isActive ? "active" : ""}`
+                `nav-link ${isActive || (item.to === "/history" && onJobPage) ? "active" : ""}`
               }
             >
               <Icon name={item.icon} />
@@ -67,8 +68,8 @@ export function Sidebar({ open, close }: { open: boolean; close: () => void }) {
               <Icon name="code" />
             </span>
             <div>
-              <strong>A foundation for vision</strong>
-              <p>Phase 01 · Platform setup</p>
+              <strong>Dashboard &amp; API integration</strong>
+              <p>Phase 07 · Live job data</p>
             </div>
             <div className="phase-progress">
               <span />

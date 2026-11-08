@@ -21,7 +21,7 @@ Solid arrows describe current integrations; dashed arrows describe later phases.
 
 | Component | Responsibilities |
 | --- | --- |
-| Frontend | Navigation, presentation, backend status, and future job interaction |
+| Frontend | Dashboard statistics, model catalog, job history, job details with live SSE progress, backend status; job submission arrives in Phase 08 |
 | Backend | REST APIs (system, models, detections), SSE progress, validation, problem-detail errors, CORS, persistence, migrations, outbox publication, event-driven job lifecycle |
 | AI worker | Health service, CLI, and a RabbitMQ consumer that runs the detection engine and stores artifacts |
 | PostgreSQL | Backend metadata and Flyway migration history |
@@ -40,7 +40,9 @@ The global exception handler returns HTTP Problem Details and validation informa
 
 ## Frontend
 
-React functional components use TypeScript strict mode, reusable navigation/status components, and a separate Axios API layer. React Router supplies Dashboard, Detection, History, and Models routes. The application shell maintains backend status across routes; the dashboard shows connection details. Feature routes identify planned work without pretending it is implemented.
+React functional components use TypeScript strict mode, reusable navigation/status components, and a separate Axios API layer. React Router supplies Dashboard, Detection, History, Models, and job details (`/detections/:jobId`) routes. The application shell maintains backend status across routes; the dashboard shows connection details.
+
+Since Phase 07, the Dashboard, History, Models, and job details pages read live data. Responses are checked with typed contracts and runtime shape checks, and failures are normalized into one `ApiError`. Job progress streams through `EventSource`, with a polling fallback (see [frontend-dashboard.md](frontend-dashboard.md)). The Detection route remains a labelled placeholder until the Phase 08 workspace.
 
 The API client defaults to `/api/v1`. Vite proxies `/api` to Spring Boot, keeping browser traffic on the frontend origin during development. `VITE_PROXY_TARGET` selects the backend target used by the Vite process. The browser displays loading, successful connection, and error states based on actual responses; it offers retry after failure. No detection counts or availability claims are fabricated.
 
