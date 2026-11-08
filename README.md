@@ -4,6 +4,8 @@
 
 A modular foundation for processing videos with YOLO models. Phase 1 provides a responsive dashboard, a Spring Boot API, a CPU-compatible Python service, and local infrastructure. The dashboard reports the actual backend connection state.
 
+Phase 02 adds the PostgreSQL schema, Flyway migrations, JPA entities, repositories, and response DTO foundations for model configurations, detection jobs, and result metadata. The initial `yolo26s` metadata remains disabled; no weights are installed. See the [database design and persistence testing guide](docs/database-design.md).
+
 Video detection, YouTube downloading, job execution, inference, statistics, authentication, and video transfer are reserved for later phases. The Detection, History, and Models pages are placeholders.
 
 ## Project structure
@@ -83,6 +85,7 @@ Install Java 21, Node.js 22.12 or later, and Python 3.11 for source development.
 ```powershell
 # backend/
 .\mvnw.cmd test
+.\mvnw.cmd -Ppostgres-it verify # Isolated PostgreSQL integration tests; Docker required.
 
 # frontend/
 npm ci
@@ -98,13 +101,14 @@ python -m venv .venv
 docker compose config --quiet
 ```
 
-On macOS/Linux, use `./mvnw test` and `.venv/bin/python -m pytest`. Backend tests use a test-only H2 database and disable RabbitMQ health checks; a passing test suite does not substitute for running the PostgreSQL/RabbitMQ Compose stack. See [development instructions](docs/development.md) for running services outside containers and verifying frontend error handling.
+On macOS/Linux, use `./mvnw test` and `.venv/bin/python -m pytest`. Fast backend tests use a test-only H2 database, generate its entity mapping schema, and target Flyway at V1 only. The `postgres-it` profile separately executes the real migrations and persistence checks against isolated PostgreSQL 17 through Testcontainers. H2 success does not prove PostgreSQL compatibility. See the [database testing guide](docs/database-design.md#test-strategy-and-commands) and [development instructions](docs/development.md).
 
 ## Architecture and development workflow
 
 The frontend calls Spring Boot through `/api/v1`; it never calls the Python worker directly. Spring Boot owns APIs, metadata, and future job coordination. Python owns future video processing. RabbitMQ will carry asynchronous jobs and MinIO will store video objects.
 
 - [Architecture and current API contracts](docs/architecture.md)
+- [Database schema, persistence mappings, and tests](docs/database-design.md)
 - [Development environment, configuration, startup, and validation](docs/development.md)
 - [Development phases](docs/roadmap.md)
 - [Persistent project rules](AGENTS.md)

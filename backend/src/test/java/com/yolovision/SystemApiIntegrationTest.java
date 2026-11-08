@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationState;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -91,8 +92,14 @@ class SystemApiIntegrationTest {
     }
 
     @Test
-    void foundationMigrationRunsOnStartup() {
+    void h2ProfileRunsTheFoundationAndLeavesPostgresqlMigrationsForIntegrationTests() {
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
-        assertThat(flyway.info().pending()).isEmpty();
+        assertThat(flyway.info().applied()).hasSize(1);
+        assertThat(flyway.info().all()).extracting(migration -> migration.getVersion().getVersion())
+                .containsExactly("1", "2", "3", "4", "5");
+        assertThat(flyway.info().all())
+                .filteredOn(migration -> !migration.getVersion().getVersion().equals("1"))
+                .extracting(migration -> migration.getState())
+                .containsOnly(MigrationState.ABOVE_TARGET);
     }
 }

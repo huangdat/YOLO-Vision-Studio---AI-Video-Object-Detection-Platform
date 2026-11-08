@@ -16,7 +16,7 @@ flowchart TD
     worker -.->|Future download / inference / encoding| pipeline[Video processing pipeline]
 ```
 
-Solid arrows describe current integrations. Dashed arrows describe later phases. The backend has no worker HTTP client, job publisher, or storage SDK in Phase 1. The worker exposes health without starting a queue consumer or importing AI libraries. MinIO is provisioned infrastructure; no buckets or video workflows are created yet.
+Solid arrows describe current integrations. Dashed arrows describe later phases. Through Phase 02, the backend has no worker HTTP client, job publisher, or storage SDK. The worker exposes health without starting a queue consumer or importing AI libraries. MinIO is provisioned infrastructure; no buckets or video workflows are created yet.
 
 | Component | Responsibilities |
 | --- | --- |
@@ -31,9 +31,9 @@ The frontend communicates only with Spring Boot. Python inference must never run
 
 ## Backend
 
-`com.yolovision` contains `controller`, `service`, `repository`, `entity`, `dto`, `config`, and `exception` packages. Controllers expose DTOs; services provide behavior through constructor injection. Repository and entity packages reserve space for later domain modeling without adding detection entities early.
+`com.yolovision` contains `controller`, `service`, `repository`, `entity`, `dto`, `config`, and `exception` packages. Controllers expose DTOs; services provide behavior through constructor injection. Phase 02 adds `ModelConfig`, `DetectionJob`, and `DetectionResult` entities, Spring Data repositories, string-based job statuses, and record response DTO foundations. No detection controller or processing service is introduced.
 
-Spring Boot configures PostgreSQL, RabbitMQ, Flyway, health probes, and CORS from environment variables. Hibernate validates schemas instead of modifying them. The first Flyway migration establishes the migration sequence without introducing detection business tables.
+Spring Boot configures PostgreSQL, RabbitMQ, Flyway, health probes, and CORS from environment variables. Hibernate validates production schemas instead of modifying them. The unchanged V1 foundation is followed by V2-V5 migrations for model metadata, jobs, results, and the disabled `yolo26s` seed. Jobs reference models restrictively; results reference one owning job and are removed with its metadata when the job is deleted. UUIDs, TIMESTAMPTZ, JSONB, relational constraints, and indexes support future processing without executing it. See [database-design.md](database-design.md) for the ER diagram, columns, query methods, and separate H2/PostgreSQL test strategies.
 
 The global exception handler returns HTTP Problem Details and validation information without exposing internal exception messages or stack traces. Actuator exposes `health` and `info`; health details are hidden. Liveness indicates the application process is running. Readiness includes database and RabbitMQ availability, so dependency outages can produce a non-success health response even while the system information endpoint still responds.
 

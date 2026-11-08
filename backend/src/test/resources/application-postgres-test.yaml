@@ -1,0 +1,17 @@
+# Datasource values are supplied by an isolated Testcontainers PostgreSQL instance.
+# Production Flyway migrations and schema validation remain enabled in this profile.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  rabbitmq:
+    password: test-only-unused
+management:
+  health:
+    rabbit:
+      enabled: false
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db

@@ -5,13 +5,21 @@ The application starts with vehicle detection as its first use case. Model, clas
 | Phase | Scope | Completion evidence |
 | --- | --- | --- |
 | 1 — Foundation | Monorepo, Spring Boot system API, FastAPI health, React dashboard, infrastructure, configuration, documentation | Service builds and tests, real backend connection state, health checks, Compose validation and startup where Docker is available, verified Git push |
-| 2 — Domain and job foundation | Define model/class catalog contracts, job lifecycle, persistence schema, API validation, messaging contracts, and object storage integration | Migrations and API tests, explicit job states, verified asynchronous contracts and storage behavior |
+| 2 — Database design and persistence | Model configurations, detection jobs and results, Flyway migrations, UUID/JSONB/timestamp mappings, repositories, DTO foundations, disabled YOLO26s seed | Persistence and constraint tests, production migrations verified separately on PostgreSQL, unchanged system API, Maven build, and verified Git push |
 | 3 — Video detection engine | Add permitted video acquisition, CPU-first YOLO inference, selected classes and confidence thresholds, video encoding, queue consumer, and result storage | Tested processing pipeline, bounded resource use, useful failure states, reproducible small video fixture checks |
 | 4 — Detection experience | Implement video URL/model/size/class configuration, start processing, progress events, annotated previews, result downloads | End-to-end job workflow and recovery from worker/API failures |
 | 5 — History and insights | Detection history, filters, object counts, and documented statistics semantics | Correct query behavior and statistics based on persisted detection results |
 | 6 — Deployment and operations | Environment-specific security, authentication if required, CI, monitoring, retention, backups, and scaling | Deployment checks, operational procedures, dependency health, and recovery exercises |
 
 These later scopes are a suggested sequence, not implemented features. A future phase may refine boundaries before coding.
+
+## Phase 02 progress
+
+The persistence implementation defines the three domain tables, model/job/result relationships, query indexes, database checks, and the nine job status names. The `yolo26s` seed is metadata only and remains disabled. Repository and response DTO foundations prepare future service work without adding detection APIs, queue consumers, model loading, or video processing.
+
+Fast H2 tests and production PostgreSQL integration tests have separate roles. The latter run with `backend/mvnw.cmd -Ppostgres-it verify` against an isolated Testcontainers database when Docker is available. Actual execution results must be reported separately; an unavailable PostgreSQL run is **NOT RUN**. See [database-design.md](database-design.md) for schema details and commands.
+
+Phase 03 is the Python YOLO Detection Engine. Its processing and integration contracts remain future work, including model availability verification before enabling a registered model.
 
 ## Phase 1 boundaries
 

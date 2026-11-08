@@ -4,6 +4,13 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+  # H2 exercises entity mappings, not the PostgreSQL-specific production schema.
+  # Keep the original foundation migration and generate only the isolated H2 schema.
+  flyway:
+    target: "1"
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
   rabbitmq:
     password: test-only-unused
 management:

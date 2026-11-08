@@ -1,2 +1,2 @@
-/** Spring Data repositories will be introduced alongside their persistence entities. */
+/** Spring Data access to model metadata, detection jobs, and detection results. */
 package com.yolovision.repository;
