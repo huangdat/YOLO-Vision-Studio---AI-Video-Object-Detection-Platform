@@ -18,6 +18,9 @@ spring:
       simple:
         auto-startup: false
 app:
+  # Tests drive the SSE poller explicitly through poll(); the scheduler never fires.
+  detection-stream:
+    poll-interval: 1h
   messaging:
     outbox:
       enabled: false

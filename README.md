@@ -12,7 +12,9 @@ Phase 04 adds multi-version model management: a PostgreSQL catalog of 20 pretrai
 
 Phase 05 adds asynchronous job processing. Spring Boot validates a detection job and saves it in PostgreSQL. A transactional outbox then publishes it to RabbitMQ with publisher confirms. A separate Python consumer (`python -m app.workers.rabbitmq_worker`, Compose service `ai-detection-consumer`) runs the existing pipeline and stores `detected.mp4` and `result.json` in MinIO. It reports progress, completion, or failure events back. Spring Boot applies those events through an idempotent, forward-only state machine and saves the `DetectionResult`. Retries are bounded, with dead-lettering and a lease monitor for silent jobs. See the [asynchronous processing guide](docs/asynchronous-job-processing.md).
 
-The browser Detection, History, and Models pages remain placeholders. Public detection job APIs (Phase 06), authentication, and video download links belong to later phases.
+Phase 06 exposes the pipeline over REST. You submit a YouTube video with `POST /api/v1/detections` (202 Accepted, through the transactional outbox). You read job state, paged history, and result metadata from the other `/api/v1/detections` endpoints, and follow live progress through Server-Sent Events at `/api/v1/detections/{jobId}/events`. OpenAPI and Swagger UI are served at `/api/v1/openapi` and `/api/v1/docs`. **The API has no authentication yet and is for local development only.** See the [detection REST API guide](docs/detection-rest-api.md).
+
+The browser Detection, History, and Models pages remain placeholders (Phase 07). Authentication and video download links belong to later phases.
 
 ## Project structure
 
@@ -67,6 +69,8 @@ The initial build downloads dependencies, installs CPU inference packages in the
 | Frontend | http://localhost:5173 | Dashboard |
 | Backend | http://localhost:8080/api/v1/system/info | System information |
 | Backend | http://localhost:8080/api/v1/models | Read-only YOLO model catalog |
+| Backend | http://localhost:8080/api/v1/detections | Detection jobs, results, and SSE progress (development only) |
+| Backend | http://localhost:8080/api/v1/docs | Swagger UI for the REST API |
 | Backend Actuator | http://localhost:8080/actuator/health | Dependency health |
 | AI worker | http://localhost:8000/health | Worker HTTP liveness |
 | Detection consumer | (no port) | RabbitMQ job consumer; health via heartbeat file |
@@ -126,6 +130,8 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Phase 04 validation results](docs/phase-04-validation.md)
 - [Asynchronous detection job processing](docs/asynchronous-job-processing.md)
 - [Phase 05 validation results](docs/phase-05-validation.md)
+- [Detection REST API and SSE](docs/detection-rest-api.md)
+- [Phase 06 validation results](docs/phase-06-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

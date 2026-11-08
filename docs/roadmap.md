@@ -46,7 +46,18 @@ Phase 05 adds asynchronous processing:
 
 See [asynchronous-job-processing.md](asynchronous-job-processing.md) and [phase-05-validation.md](phase-05-validation.md), including the real end-to-end YOLO11n run. There is still no public job endpoint, cancellation, or download link.
 
-Phase 06 adds Spring Boot detection job REST APIs on top of the internal submission service.
+## Phase 06 progress
+
+Phase 06 adds the detection REST APIs on top of the Phase 05 submission service and outbox:
+
+- **Submission:** create returns 202 with a `Location` header.
+- **Reads:** details, paged and filtered history, and result metadata. Result counts are labelled as frame detections.
+- **Progress:** Server-Sent Events backed by one shared database poller, with heartbeats, a connection cap, and terminal close.
+- **Errors and docs:** RFC 9457 errors with stable codes, plus OpenAPI and Swagger UI.
+
+No migration was needed. The API is unauthenticated and development-only. See [detection-rest-api.md](detection-rest-api.md) and [phase-06-validation.md](phase-06-validation.md).
+
+Phase 07 integrates the React dashboard with these APIs.
 
 ## Phase 1 boundaries
 

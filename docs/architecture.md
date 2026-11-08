@@ -6,7 +6,7 @@ YOLO Vision Studio separates the browser application, API and metadata service, 
 
 ```mermaid
 flowchart TD
-    frontend[React frontend] -->|REST: system information| backend[Spring Boot backend]
+    frontend[React frontend] -->|REST + SSE: system, models, detections| backend[Spring Boot backend]
     backend -->|JPA / Flyway| postgres[(PostgreSQL metadata)]
     backend -->|Outbox: confirmed job commands| rabbit[RabbitMQ]
     rabbit -->|vision.detection.jobs| worker[Python detection consumer]
@@ -22,7 +22,7 @@ Solid arrows describe current integrations; dashed arrows describe later phases.
 | Component | Responsibilities |
 | --- | --- |
 | Frontend | Navigation, presentation, backend status, and future job interaction |
-| Backend | API contracts, validation, exceptions, CORS, persistence, migrations, job submission, outbox publication, event-driven job lifecycle |
+| Backend | REST APIs (system, models, detections), SSE progress, validation, problem-detail errors, CORS, persistence, migrations, outbox publication, event-driven job lifecycle |
 | AI worker | Health service, CLI, and a RabbitMQ consumer that runs the detection engine and stores artifacts |
 | PostgreSQL | Backend metadata and Flyway migration history |
 | RabbitMQ | Durable quorum queues for job commands and worker events, with dead-lettering |
@@ -80,7 +80,7 @@ Phase 04 replaces the single-model allowlist with `model_registry.py`, which lis
 
 Read-only model catalog, served by Spring Boot from PostgreSQL (works while the worker is offline): `GET /api/v1/models` (optional `version`, `size`, `enabled` filters), `GET /api/v1/models/versions`, and `GET /api/v1/models/{modelKey}`. See [yolo-model-management.md](yolo-model-management.md#5-spring-boot-rest-api-read-only) for response shapes and errors.
 
-The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Public detection job APIs, SSE progress events, and video download contracts belong to later phases. The RabbitMQ message contracts (schema version 1) are documented in [asynchronous-job-processing.md](asynchronous-job-processing.md#3-message-contracts-schema-version-1).
+The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Detection job APIs (Phase 06): `POST /api/v1/detections` (202), `GET /api/v1/detections` (paged history), `GET /api/v1/detections/{jobId}`, `GET /api/v1/detections/{jobId}/result`, and the SSE stream `GET /api/v1/detections/{jobId}/events`. SSE reads persisted state through one shared poller, so RabbitMQ stays internal. All errors are RFC 9457 problems with a stable `code`. See [detection-rest-api.md](detection-rest-api.md). OpenAPI is served at `/api/v1/openapi`. Video download contracts belong to later phases. The RabbitMQ message contracts (schema version 1) are documented in [asynchronous-job-processing.md](asynchronous-job-processing.md#3-message-contracts-schema-version-1).
 
 ## Deployment and persistence
 

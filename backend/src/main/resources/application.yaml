@@ -57,6 +57,15 @@ app:
   name: ${APP_DISPLAY_NAME:YOLO Vision Studio}
   version: ${APP_VERSION:1.0.0}
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  detection-stream:
+    # One shared poller reads all watched jobs per tick; streams close at terminal states.
+    timeout: ${DETECTION_SSE_TIMEOUT_SECONDS:1800}s
+    poll-interval: ${DETECTION_SSE_POLL_INTERVAL_MS:1000}ms
+    heartbeat-interval: ${DETECTION_SSE_HEARTBEAT_SECONDS:15}s
+    max-connections: ${DETECTION_SSE_MAX_CONNECTIONS:100}
+    reconnect-delay: 3s
+  detection-api:
+    max-request-bytes: ${DETECTION_API_MAX_REQUEST_BYTES:16384}
   messaging:
     command-exchange: ${RABBITMQ_COMMAND_EXCHANGE:vision.detection.commands}
     command-queue: ${RABBITMQ_COMMAND_QUEUE:vision.detection.jobs}
@@ -81,6 +90,15 @@ app:
       lease-check-interval: ${JOB_LEASE_CHECK_INTERVAL:60s}
       processing-timeout: ${JOB_PROCESSING_TIMEOUT_SECONDS:1800}s
       queue-timeout: ${JOB_QUEUE_TIMEOUT_SECONDS:86400}s
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /api/v1/openapi
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
+    path: /api/v1/docs
+  paths-to-match: /api/v1/**
 
 management:
   endpoints:

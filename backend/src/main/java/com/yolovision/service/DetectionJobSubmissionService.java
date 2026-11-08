@@ -8,6 +8,7 @@ import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobOutboxMessage;
 import com.yolovision.entity.DetectionSourceType;
 import com.yolovision.entity.ModelConfig;
+import com.yolovision.exception.DetectionModelUnavailableException;
 import com.yolovision.exception.InvalidDetectionJobException;
 import com.yolovision.repository.DetectionJobOutboxRepository;
 import com.yolovision.repository.DetectionJobRepository;
@@ -16,14 +17,10 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -45,8 +42,6 @@ public class DetectionJobSubmissionService {
     static final List<Integer> DEFAULT_CLASSES = List.of(1, 2, 3, 5, 7);
 
     private static final Logger LOG = LoggerFactory.getLogger(DetectionJobSubmissionService.class);
-    private static final Set<String> YOUTUBE_HOSTS = Set.of(
-            "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be");
     private static final Pattern LOCAL_PATH = Pattern.compile("^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$");
 
     private final ModelConfigRepository models;
@@ -68,20 +63,26 @@ public class DetectionJobSubmissionService {
     public UUID submit(DetectionJobSubmissionRequest request) {
         validate(request);
         ModelConfig model = models.findByModelKey(request.modelKey())
-                .orElseThrow(() -> InvalidDetectionJobException.of("modelKey", "is not registered"));
+                .orElseThrow(() -> new DetectionModelUnavailableException(
+                        DetectionModelUnavailableException.Reason.NOT_FOUND, "is not registered"));
         if (!"DETECT".equals(model.getTaskType())) {
-            throw InvalidDetectionJobException.of("modelKey", "is not an object detection model");
+            throw new DetectionModelUnavailableException(
+                    DetectionModelUnavailableException.Reason.NOT_DETECTION, "is not an object detection model");
         }
         // Administrative enablement only; worker cache readiness is verified by the worker.
         if (!model.isEnabled()) {
-            throw InvalidDetectionJobException.of("modelKey", "is not enabled for detection");
+            throw new DetectionModelUnavailableException(
+                    DetectionModelUnavailableException.Reason.DISABLED, "is not enabled for detection");
         }
         BigDecimal confidence = request.confidence() == null
                 ? DEFAULT_CONFIDENCE : request.confidence().setScale(3, RoundingMode.UNNECESSARY);
         int imageSize = request.imageSize() == null ? DEFAULT_IMAGE_SIZE : request.imageSize();
         List<Integer> classes = request.classes() == null ? DEFAULT_CLASSES : List.copyOf(request.classes());
 
-        DetectionJob job = new DetectionJob(model, request.source().strip(), confidence, imageSize, classes);
+        // YouTube sources are stored canonically (https://www.youtube.com/watch?v=<id>).
+        String source = request.sourceType() == DetectionSourceType.YOUTUBE_URL
+                ? YouTubeVideoUrl.canonicalize(request.source().strip()) : request.source().strip();
+        DetectionJob job = new DetectionJob(model, source, confidence, imageSize, classes);
         job.setSourceType(request.sourceType());
         jobs.saveAndFlush(job);
 
@@ -122,21 +123,13 @@ public class DetectionJobSubmissionService {
         }
     }
 
-    /** First-line check only; the worker canonicalises and revalidates before downloading. */
+    /** Same single-video rules as the worker, which revalidates before downloading. */
     private static String youtubeProblem(String source) {
         try {
-            URI uri = new URI(source);
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
-            if (!scheme.equals("https") && !scheme.equals("http")) {
-                return "must be an http(s) YouTube URL";
-            }
-            if (uri.getRawUserInfo() != null || !YOUTUBE_HOSTS.contains(host)) {
-                return "must be a supported YouTube video URL";
-            }
+            YouTubeVideoUrl.canonicalize(source);
             return null;
-        } catch (URISyntaxException exception) {
-            return "must be a valid URL";
+        } catch (IllegalArgumentException exception) {
+            return exception.getMessage();
         }
     }
 
