@@ -31,7 +31,7 @@ afterEach(cleanup);
 const renderModels = (path = "/models") => renderAt(path, "/models", <Models />);
 
 function cards() {
-  return screen.getAllByRole("listitem").map((item) => item.querySelector("h3")!.textContent);
+  return screen.getAllByRole("listitem").map((item) => item.querySelector(".model-key code")!.textContent);
 }
 
 describe("Models page", () => {
@@ -41,9 +41,16 @@ describe("Models page", () => {
     expect(screen.getByText("3 models registered")).toBeTruthy();
     const yolo11n = screen.getAllByRole("listitem")[1];
     expect(within(yolo11n).getByText("Enabled")).toBeTruthy();
-    expect(within(yolo11n).getByText("yolo11n.pt")).toBeTruthy();
+    // Checkpoint filenames live in the details panel, not on the card.
+    expect(within(yolo11n).queryByText("yolo11n.pt")).toBeNull();
     expect(within(screen.getAllByRole("listitem")[0]).getByText("Disabled")).toBeTruthy();
     expect(screen.getByText(/does not confirm that a worker has prepared its weights/)).toBeTruthy();
+    // Cards lead with a readable name; the model key stays visible beneath it.
+    expect(screen.getAllByRole("listitem").map((item) => item.querySelector("h3")!.textContent)).toEqual([
+      "YOLOv8 Nano",
+      "YOLO11 Nano",
+      "YOLO26 Small",
+    ]);
     expect(screen.queryByRole("button", { name: /download|enable/i })).toBeNull();
   });
 

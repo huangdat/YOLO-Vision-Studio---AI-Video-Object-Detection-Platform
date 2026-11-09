@@ -182,6 +182,7 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Frontend dashboard and API integration](docs/frontend-dashboard.md)
 - [Phase 07 validation results](docs/phase-07-validation.md)
 - [Video Detection Workspace](docs/video-detection-workspace.md)
+- [UI/UX redesign (light interface)](docs/ui-ux-redesign.md)
 - [Phase 08 validation results](docs/phase-08-validation.md)
 - [Video preview, streaming, and downloads](docs/video-preview-download.md)
 - [Phase 09 validation results](docs/phase-09-validation.md)

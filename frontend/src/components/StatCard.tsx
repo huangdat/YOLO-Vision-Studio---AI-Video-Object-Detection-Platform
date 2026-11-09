@@ -18,8 +18,8 @@ export function StatCard({
     <article className="stat-card">
       <div className="stat-top">
         <h3>{label}</h3>
-        <span className={`tile-icon ${tone}`}>
-          <Icon name={icon} size={17} />
+        <span className={`tile-icon ${tone}`} aria-hidden="true">
+          <Icon name={icon} size={18} />
         </span>
       </div>
       <p className="stat-value">{value}</p>

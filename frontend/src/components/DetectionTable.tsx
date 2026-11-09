@@ -6,11 +6,14 @@ import { Icon } from "./Icon";
 import { JobStatusBadge } from "./JobStatusBadge";
 import { ProgressBar } from "./ProgressBar";
 
-/** Job rows (history and recent activity). Scrolls horizontally on narrow screens. */
+/**
+ * Job rows (history and recent activity). On narrow screens each row becomes a stacked
+ * card; the data-label attributes provide the column names there.
+ */
 export function DetectionTable({
   jobs,
   caption,
-  showCompleted = true,
+  showCompleted = false,
 }: {
   jobs: DetectionJobSummary[];
   caption: string;
@@ -36,15 +39,19 @@ export function DetectionTable({
         <tbody>
           {jobs.map((job) => (
             <tr key={job.jobId}>
-              <td>
-                <code title={job.jobId}>{shortId(job.jobId)}</code>
+              <td data-label="Job">
+                <code className="job-id" title={job.jobId}>
+                  {shortId(job.jobId)}
+                </code>
               </td>
-              <td>{job.modelKey}</td>
-              <td>
-                <JobStatusBadge status={job.status} />
-                {job.errorCode && <span className="error-code">{job.errorCode}</span>}
+              <td data-label="Model">{job.modelKey}</td>
+              <td data-label="Status">
+                <span className="status-cell">
+                  <JobStatusBadge status={job.status} />
+                  {job.errorCode && <span className="error-code">{job.errorCode}</span>}
+                </span>
               </td>
-              <td>
+              <td data-label="Progress">
                 <div className="table-progress">
                   <ProgressBar
                     value={job.progress}
@@ -55,16 +62,16 @@ export function DetectionTable({
                   <span>{job.progress}%</span>
                 </div>
               </td>
-              <td>{formatDateTime(job.createdAt)}</td>
-              {showCompleted && <td>{formatDateTime(job.completedAt)}</td>}
-              <td>
+              <td data-label="Created">{formatDateTime(job.createdAt)}</td>
+              {showCompleted && <td data-label="Completed">{formatDateTime(job.completedAt)}</td>}
+              <td className="cell-action">
                 <Link
                   className="table-link"
                   to={`/detections/${job.jobId}`}
                   aria-label={`View details for job ${shortId(job.jobId)}`}
                 >
                   View details
-                  <Icon name="arrow" size={14} />
+                  <Icon name="arrow" size={15} />
                 </Link>
               </td>
             </tr>

@@ -63,8 +63,7 @@ export function ConfidenceControl({
         </p>
       )}
       <p id={hintId} className="field-hint">
-        Detections below this confidence are discarded. Higher values reduce lower-confidence
-        detections; this is not an accuracy score.
+        Detections below this score are ignored. Raise it to keep only confident detections.
       </p>
     </div>
   );
@@ -101,8 +100,7 @@ export function ImageSizeSelector({
         ))}
       </select>
       <p id={hintId} className="field-hint">
-        Higher image sizes may improve detail on small objects but increase processing time and
-        resource usage, especially on CPU workers.
+        Larger sizes can find smaller objects but take longer to process.
       </p>
     </div>
   );

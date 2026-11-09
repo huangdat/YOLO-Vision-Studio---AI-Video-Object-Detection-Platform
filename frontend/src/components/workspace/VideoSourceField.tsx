@@ -31,7 +31,7 @@ export function VideoSourceField({
           autoComplete="off"
           spellCheck={false}
           required
-          className="text-input"
+          className="text-input input-large"
           placeholder="https://www.youtube.com/watch?v=…"
           value={value}
           disabled={disabled}
@@ -48,7 +48,7 @@ export function VideoSourceField({
             disabled={disabled}
             aria-label="Clear video URL"
           >
-            <Icon name="close" size={14} />
+            <Icon name="close" size={16} />
           </button>
         )}
       </div>
@@ -58,9 +58,8 @@ export function VideoSourceField({
         </p>
       )}
       <p id={hintId} className="field-hint">
-        A single public video: watch, youtu.be, shorts, or embed links. Playlists, other sites,
-        and local files are not accepted. Only submit videos you are permitted to download and
-        process; restricted or private videos will fail during download.
+        Paste a public YouTube video link that you are allowed to process. Single videos only
+        (watch, youtu.be, Shorts, or embed links); playlists are not supported.
       </p>
     </div>
   );

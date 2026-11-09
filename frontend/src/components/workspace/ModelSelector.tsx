@@ -2,6 +2,7 @@ import { useId } from "react";
 import { sizeName } from "../../lib/format";
 import { modelsForVersion, type ModelChoice } from "../../lib/modelSelection";
 import type { ModelConfig } from "../../types/models";
+import { Icon } from "../Icon";
 
 /** Version and size come from the real catalog; the pair resolves to an actual record. */
 export function ModelSelector({
@@ -50,7 +51,7 @@ export function ModelSelector({
         </select>
       </div>
 
-      <fieldset className="form-field size-options" disabled={disabled} aria-describedby={statusId}>
+      <fieldset className="form-field" disabled={disabled} aria-describedby={statusId}>
         <legend className="field-label">Model size</legend>
         <div className="segmented">
           {sizes.map((model) => (
@@ -66,33 +67,39 @@ export function ModelSelector({
                 onChange={() => onSizeChange(model.modelSize)}
               />
               <span className="segment-title">{sizeName(model.modelSize)}</span>
-              <span className="segment-meta">
-                <code>{model.modelKey}</code>
-                {!model.enabled && <span className="segment-tag">Disabled</span>}
-              </span>
+              <span className="segment-meta">{model.enabled ? model.modelKey : "Disabled"}</span>
             </label>
           ))}
         </div>
       </fieldset>
 
-      <div id={statusId} className={`model-status ${selected?.enabled ? "enabled" : "disabled"}`}>
+      <p id={statusId} className={`model-status ${selected?.enabled ? "enabled" : "disabled"}`}>
         {selected ? (
           selected.enabled ? (
-            <p>
-              <strong>{selected.modelKey}</strong> is enabled for detection. Enablement is an
-              administrative setting; the worker still needs the model&apos;s weights prepared and
-              reports <code>MODEL_NOT_PREPARED</code> otherwise.
-            </p>
+            <>
+              <Icon name="check" size={16} />
+              <span>
+                <strong>
+                  {selected.version} {sizeName(selected.modelSize)}
+                </strong>{" "}
+                (<code>{selected.modelKey}</code>) is enabled for detection.
+              </span>
+            </>
           ) : (
-            <p>
-              <strong>{selected.modelKey}</strong> is disabled and cannot be submitted. An
-              administrator must prepare and enable it first.
-            </p>
+            <>
+              <Icon name="alert" size={16} />
+              <span>
+                <strong>
+                  {selected.version} {sizeName(selected.modelSize)}
+                </strong>{" "}
+                is disabled and cannot be used. Choose an enabled size or version.
+              </span>
+            </>
           )
         ) : (
-          <p>No model is selected.</p>
+          <span>No model is selected.</span>
         )}
-      </div>
+      </p>
       {error && (
         <p className="field-error" role="alert">
           {error}

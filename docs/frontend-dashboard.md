@@ -75,8 +75,9 @@ Cards show the key, version, size name, task, checkpoint filename, and **adminis
 | Total, Completed, Failed | `totalElements` of `GET /detections?size=1` without a filter and with `status=COMPLETED` / `status=FAILED` |
 | In progress | Total − Completed − Failed − Cancelled (each from its own `size=1` count query), floored at 0 |
 | YOLO models, enabled | `GET /models` (the whole catalog is small) |
+
+The model-family panel was removed in the light redesign; see [ui-ux-redesign.md](ui-ux-redesign.md).
 | Recent activity | `GET /detections?size=5` |
-| Families | `GET /models/versions` and the catalog, grouped by version |
 
 Counts never come from the rows of a page. The four count queries are separate requests rather than one snapshot. A job that changes state between them can make "In progress" briefly inaccurate by one, which is why it is floored at 0. The dashboard loads once per visit and has no polling. The backend connection check keeps its existing 30-second refresh.
 

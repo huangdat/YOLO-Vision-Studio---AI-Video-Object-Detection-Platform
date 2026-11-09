@@ -49,22 +49,24 @@ The catalog (`GET /api/v1/models` and `GET /api/v1/models/versions`) is the only
 - **Version change:** the size is kept when the new version has it, otherwise an enabled size is preferred, otherwise the smallest.
 - **Reload:** a still-registered choice is kept; a removed one falls back to the default. The choice is derived during render, so a reloaded catalog never shows a stale or empty selection.
 
-**Disabled models** can be selected for inspection but never submitted. The status box, the summary, and the submit bar all say so, and pressing *Start detection* only reveals the validation messages; no request is sent. Enablement remains an administrative setting (SQL, see [yolo-model-management.md](yolo-model-management.md)); the workspace has no enable or download controls. "Enabled" does not prove the worker has prepared the weights: the worker reports `MODEL_NOT_PREPARED` on the job page in that case, and the UI says so.
+**Disabled models** can be selected for inspection but never submitted. The size option is marked *Disabled*, and the model status line and the submit area say so, and pressing *Start detection* only reveals the validation messages; no request is sent. Enablement remains an administrative setting (SQL, see [yolo-model-management.md](yolo-model-management.md)); the workspace has no enable or download controls. "Enabled" does not prove the worker has prepared the weights: the worker reports `MODEL_NOT_PREPARED` on the job page in that case, and the UI says so.
 
-Catalog states: loading skeleton, error with *Try again* (for retryable errors), "No models are registered", and a warning when no model is enabled.
+Catalog states: loading skeleton, error with *Try again* (for retryable errors), "No models are registered", and the warning "No models are currently available for detection" when no model is enabled.
 
 ## 4. Object classes
 
 `lib/cocoClasses.ts` holds the 80 COCO classes (IDs 0–79). They were copied from the `names` of the real `yolo11n.pt` and `yolo26s.pt` checkpoints (identical maps). The backend has no class-catalog endpoint, so this module is the single frontend source.
 
-- **Presets:** *Vehicles (default)* = bicycle 1, car 2, motorcycle 3, bus 5, truck 7; *All 80 classes* sends all 80 IDs explicitly; *Clear*.
-- **Search** by name or exact ID; a "No class matches" message for no results.
+- **Presets** (radio cards): *Vehicles* (the default) = bicycle 1, car 2, motorcycle 3, bus 5, truck 7; *All objects* sends all 80 IDs explicitly; *Custom* keeps the current selection and opens the searchable list of all 80 classes with *Clear selection*. The 80-class list is hidden unless *Custom* is chosen.
+- **Search** (in *Custom*) by name or exact ID; a "No class matches" message for no results.
 - **Removable chips** for selections of up to 12 classes, plus a live "N of 80 selected" count.
 - The request always carries sorted, duplicate-free IDs. At least one class is required (the backend allows 1–100).
 
 Results are counted as bounding-box **detection events per frame, not unique objects**; the hint says so.
 
 ## 5. Confidence and image size
+
+Both live in the collapsed **Advanced settings** section, whose header summarises the current values (for example "Confidence 0.25 · Image size 640 px"). Collapsing never resets a value. A validation error on either field keeps the section open until it is fixed.
 
 - **Confidence:** a slider (0.01 steps) and a numeric field (up to three decimals) share one text value, so they always agree. Default `0.25`; valid range 0–1 with at most three decimals (the backend `@Digits(fraction = 3)` rule). Invalid text is kept as typed and flagged, not silently corrected. The hint states it is a filter threshold, not an accuracy score.
 - **Image size:** 320, 640 (default), 960, or 1280 px. All are backend-valid multiples of 32. The hint notes that larger sizes cost more time, especially on CPU workers.
@@ -111,8 +113,7 @@ src/lib/cocoClasses.ts        verified COCO class map and presets
 src/lib/detectionForm.ts      form state, validation, exact request body
 src/api/detections.ts         createDetection (POST /detections)
 src/components/workspace/     VideoSourceField, ModelSelector, ClassSelector,
-                              DetectionSettings (ConfidenceControl, ImageSizeSelector),
-                              ConfigurationSummary
+                              DetectionSettings (ConfidenceControl, ImageSizeSelector)
 src/pages/Detection.tsx       page orchestration, submission, error mapping
 src/pages/DetectionDetails.tsx  "Job submitted" notice from router state
 ```

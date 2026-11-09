@@ -9,7 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { DetectionVideoPlayer } from "../components/results/DetectionVideoPlayer";
 import { ResultJsonViewer } from "../components/results/ResultJsonViewer";
 import { ProgressBar } from "../components/ProgressBar";
-import { EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
+import { Alert, Disclosure, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { useApiResource, type Resource } from "../hooks/useApiResource";
 import {
   isNewerSnapshot,
@@ -23,6 +23,7 @@ import {
   formatNumber,
   shortId,
 } from "../lib/format";
+import { className } from "../lib/cocoClasses";
 import { isTerminal, JOB_STATUS } from "../lib/jobStatus";
 import type {
   DetectionJob,
@@ -123,11 +124,11 @@ export function DetectionDetails() {
   }
 
   const meta = JOB_STATUS[current.status];
+  const headline = statusHeadline(current.status, meta.description);
   return (
     <DetailsShell title={`Job ${shortId(loaded.jobId)}`}>
       {justSubmitted && (
-        <div className="submitted-notice" role="status">
-          <Icon name="check" size={16} />
+        <Alert tone="success" role="status">
           <p>
             Job submitted. The backend accepted it and queued it for the AI worker; progress
             updates appear below.{" "}
@@ -135,92 +136,130 @@ export function DetectionDetails() {
               Start another detection
             </Link>
           </p>
-        </div>
+        </Alert>
       )}
-      <section className="panel job-status-panel" aria-labelledby="status-title">
-        <div className="section-heading">
+
+      <section className={`card status-card status-${meta.tone}`} aria-labelledby="status-title">
+        <div className="status-card-top">
           <div>
-            <h2 id="status-title">Processing status</h2>
-            <p>
-              <code className="full-id">{loaded.jobId}</code>
+            <h2 id="status-title">{headline.title}</h2>
+            <p className="status-card-text" aria-live="polite">
+              {headline.text}
             </p>
           </div>
           <JobStatusBadge status={current.status} />
         </div>
-        <div className="panel-body">
-          <div className="stage-row">
-            <span className="stage-label" aria-live="polite">
-              {meta.description}
-            </span>
-            <strong>{current.progress}%</strong>
-          </div>
-          <ProgressBar value={current.progress} tone={meta.tone} label="Job progress" />
-          {connection !== "idle" && connection !== "closed" && (
-            <p className={`connection-note ${connection}`}>
-              <span className="status-dot" aria-hidden="true" />
-              {CONNECTION_LABEL[connection]}
-            </p>
-          )}
-          {current.status === "FAILED" && (
-            <div className="failure-box" role="alert">
-              <Icon name="alert" size={18} />
-              <div>
-                <strong>{loaded.errorCode ?? current.errorCode ?? "FAILED"}</strong>
-                <p>{loaded.errorMessage ?? current.message ?? "Detection failed."}</p>
-              </div>
+        {current.status !== "FAILED" && current.status !== "CANCELLED" && (
+          <div className="status-progress">
+            <div className="stage-row">
+              <span>Progress</span>
+              <strong>{current.progress}%</strong>
             </div>
-          )}
-          {current.status === "CANCELLED" && (
-            <p className="muted-text">This job was cancelled and will not produce results.</p>
-          )}
-        </div>
+            <ProgressBar value={current.progress} tone={meta.tone} label="Job progress" />
+          </div>
+        )}
+        {(current.status === "FAILED" || current.status === "CANCELLED") && (
+          <ProgressBar value={current.progress} tone={meta.tone} label="Job progress" size="small" />
+        )}
+        {connection !== "idle" && connection !== "closed" && (
+          <p className={`connection-note ${connection}`}>
+            <span className="status-dot" aria-hidden="true" />
+            {CONNECTION_LABEL[connection]}
+          </p>
+        )}
+        {current.status === "FAILED" && (
+          <Alert tone="error" role="alert">
+            <p>{loaded.errorMessage ?? current.message ?? "Detection failed."}</p>
+            <p className="error-code-line">
+              Error code <code>{loaded.errorCode ?? current.errorCode ?? "FAILED"}</code>
+            </p>
+          </Alert>
+        )}
       </section>
 
-      <div className="dashboard-columns">
-        <JobConfiguration job={loaded} />
-        <JobTimeline job={loaded} />
-      </div>
-
       {completed && <ResultPanel jobId={loaded.jobId} result={result} />}
+
+      <JobSettings job={loaded} />
+
+      <section className="card page-section" aria-label="Technical details">
+        <Disclosure label="Technical details" summary="Job ID, class IDs, and update time">
+          <dl className="detail-list">
+            <div>
+              <dt>Job ID</dt>
+              <dd>
+                <code className="full-id">{loaded.jobId}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Class IDs</dt>
+              <dd>{loaded.classes.join(", ")}</dd>
+            </div>
+            <div>
+              <dt>Last update</dt>
+              <dd>{formatDateTime(loaded.updatedAt)}</dd>
+            </div>
+          </dl>
+        </Disclosure>
+      </section>
     </DetailsShell>
   );
+}
+
+/** Plain-language heading for each lifecycle state; the badge keeps the exact status. */
+function statusHeadline(status: DetectionJob["status"], description: string) {
+  switch (status) {
+    case "COMPLETED":
+      return { title: "Detection complete", text: "Your video has been processed successfully." };
+    case "FAILED":
+      return { title: "We couldn't process this video", text: "The job stopped before producing results." };
+    case "CANCELLED":
+      return { title: "Detection cancelled", text: "This job was cancelled and will not produce results." };
+    default:
+      return { title: "Processing your video", text: description };
+  }
 }
 
 function DetailsShell({ title, children }: { title: string; children: ReactNode }) {
   return (
     <>
       <PageHeader
-        eyebrow="DETECTION JOB"
         title={title}
         aside={
-          <Link to="/history" className="button-secondary">
-            <Icon name="chevronLeft" size={14} />
+          <Link to="/history" className="button-ghost">
+            <Icon name="chevronLeft" size={16} />
             Back to history
           </Link>
         }
       />
-      {children}
+      <div className="details-stack">{children}</div>
     </>
   );
 }
 
-function JobConfiguration({ job }: { job: DetectionJob }) {
+function JobSettings({ job }: { job: DetectionJob }) {
   return (
-    <section className="panel" aria-labelledby="config-title">
-      <div className="section-heading">
+    <section className="card" aria-labelledby="config-title">
+      <h2 id="config-title" className="card-title">
+        Job settings
+      </h2>
+      <dl className="detail-grid">
         <div>
-          <h2 id="config-title">Configuration</h2>
-        </div>
-      </div>
-      <dl className="detail-list panel-body">
-        <div><dt>Model</dt><dd><code>{job.modelKey}</code> · {job.modelVersion}</dd></div>
-        <div><dt>Confidence threshold</dt><dd>{job.confidence}</dd></div>
-        <div><dt>Image size</dt><dd>{job.imageSize} px</dd></div>
-        <div>
-          <dt>Selected class IDs</dt>
-          <dd className="chip-list">
-            {job.classes.map((id) => <span key={id} className="chip">{id}</span>)}
+          <dt>Model</dt>
+          <dd>
+            <code>{job.modelKey}</code> · {job.modelVersion}
           </dd>
+        </div>
+        <div>
+          <dt>Confidence threshold</dt>
+          <dd>{job.confidence}</dd>
+        </div>
+        <div>
+          <dt>Image size</dt>
+          <dd>{job.imageSize} px</dd>
+        </div>
+        <div>
+          <dt>Objects</dt>
+          <dd>{job.classes.map((id) => classLabel(className(id))).join(", ")}</dd>
         </div>
         <div>
           <dt>Source</dt>
@@ -228,31 +267,25 @@ function JobConfiguration({ job }: { job: DetectionJob }) {
             {job.videoUrl ? (
               <a href={job.videoUrl} target="_blank" rel="noreferrer noopener" className="text-link">
                 YouTube video
-                <Icon name="external" size={13} />
+                <Icon name="external" size={14} />
               </a>
             ) : (
               "Local development source"
             )}
           </dd>
         </div>
-      </dl>
-    </section>
-  );
-}
-
-function JobTimeline({ job }: { job: DetectionJob }) {
-  return (
-    <section className="panel" aria-labelledby="timeline-title">
-      <div className="section-heading">
         <div>
-          <h2 id="timeline-title">Timeline</h2>
+          <dt>Created</dt>
+          <dd>{formatDateTime(job.createdAt)}</dd>
         </div>
-      </div>
-      <dl className="detail-list panel-body">
-        <div><dt>Created</dt><dd>{formatDateTime(job.createdAt)}</dd></div>
-        <div><dt>Started</dt><dd>{formatDateTime(job.startedAt)}</dd></div>
-        <div><dt>Completed</dt><dd>{formatDateTime(job.completedAt)}</dd></div>
-        <div><dt>Last update</dt><dd>{formatDateTime(job.updatedAt)}</dd></div>
+        <div>
+          <dt>Started</dt>
+          <dd>{formatDateTime(job.startedAt)}</dd>
+        </div>
+        <div>
+          <dt>Completed</dt>
+          <dd>{formatDateTime(job.completedAt)}</dd>
+        </div>
       </dl>
     </section>
   );
@@ -270,16 +303,14 @@ function ResultPanel({
       {result.status === "success" && <ResultMedia jobId={jobId} result={result.data} />}
       <ResultStatisticsPanel result={result} />
       {result.status === "success" && result.data.resultMetadataAvailable && (
-        <section className="panel" aria-labelledby="json-title">
-          <div className="section-heading">
+        <section className="card" aria-labelledby="json-title">
+          <div className="card-header">
             <div>
               <h2 id="json-title">Result JSON</h2>
               <p>The raw result file stored by the AI worker.</p>
             </div>
           </div>
-          <div className="panel-body">
-            <ResultJsonViewer jobId={jobId} />
-          </div>
+          <ResultJsonViewer jobId={jobId} />
         </section>
       )}
     </>
@@ -291,39 +322,31 @@ function ResultMedia({ jobId, result }: { jobId: string; result: DetectionResult
   const [missing, setMissing] = useState(false);
   const videoAvailable = result.outputVideoAvailable && !missing;
   return (
-    <section className="panel" aria-labelledby="video-title">
-      <div className="section-heading">
-        <div>
-          <h2 id="video-title">Detected video</h2>
-          <p>
-            The annotated MP4 produced by the AI worker, streamed through the backend from
-            private storage.
-          </p>
+    <section className="card media-card" aria-labelledby="video-title">
+      <h2 id="video-title" className="card-title">
+        Detected video
+      </h2>
+      {result.outputVideoAvailable ? (
+        <DetectionVideoPlayer jobId={jobId} onMissing={() => setMissing(true)} />
+      ) : (
+        <EmptyState icon="film" title="No annotated video was recorded for this job." />
+      )}
+      {(videoAvailable || result.resultMetadataAvailable) && (
+        <div className="media-actions">
+          {videoAvailable && (
+            <a className="button-primary" href={detectionVideoDownloadUrl(jobId)} download>
+              <Icon name="download" size={18} />
+              Download detected video
+            </a>
+          )}
+          {result.resultMetadataAvailable && (
+            <a className="button-secondary" href={resultJsonDownloadUrl(jobId)} download>
+              <Icon name="download" size={18} />
+              Download JSON
+            </a>
+          )}
         </div>
-      </div>
-      <div className="panel-body">
-        {result.outputVideoAvailable ? (
-          <DetectionVideoPlayer jobId={jobId} onMissing={() => setMissing(true)} />
-        ) : (
-          <EmptyState icon="film" title="No annotated video was recorded for this job." />
-        )}
-        {(videoAvailable || result.resultMetadataAvailable) && (
-          <div className="media-actions">
-            {videoAvailable && (
-              <a className="button-primary" href={detectionVideoDownloadUrl(jobId)} download>
-                <Icon name="download" size={16} />
-                Download detected video
-              </a>
-            )}
-            {result.resultMetadataAvailable && (
-              <a className="button-secondary" href={resultJsonDownloadUrl(jobId)} download>
-                <Icon name="download" size={14} />
-                Download JSON
-              </a>
-            )}
-          </div>
-        )}
-      </div>
+      )}
     </section>
   );
 }
@@ -334,23 +357,21 @@ function ResultStatisticsPanel({
   result: Resource<DetectionResultMetadata> & { reload: () => void };
 }) {
   return (
-    <section className="panel" aria-labelledby="result-title">
-      <div className="section-heading">
+    <section className="card" aria-labelledby="result-title">
+      <div className="card-header">
         <div>
-          <h2 id="result-title">Detection results</h2>
+          <h2 id="result-title">Detection summary</h2>
           <p>
-            Counts are bounding-box detections summed across all processed frames, not
-            unique objects. An object visible in many frames is counted in each frame.
+            Counts are detections summed across all processed frames, not unique objects. An
+            object visible in many frames is counted in each frame.
           </p>
         </div>
       </div>
-      <div className="panel-body">
-        {result.status === "loading" && <LoadingSkeleton rows={4} label="Loading results" />}
-        {result.status === "error" && (
-          <ErrorState title="Results could not be loaded" error={result.error} onRetry={result.reload} />
-        )}
-        {result.status === "success" && <ResultStatistics result={result.data} />}
-      </div>
+      {result.status === "loading" && <LoadingSkeleton rows={4} label="Loading results" />}
+      {result.status === "error" && (
+        <ErrorState title="Results could not be loaded" error={result.error} onRetry={result.reload} />
+      )}
+      {result.status === "success" && <ResultStatistics result={result.data} />}
     </section>
   );
 }
@@ -361,13 +382,13 @@ function ResultStatistics({ result }: { result: DetectionResultMetadata }) {
   return (
     <>
       <dl className="result-metrics">
-        <div><dt>Model used</dt><dd><code>{result.modelKey}</code></dd></div>
         <div><dt>Frames processed</dt><dd>{formatNumber(result.totalFrames)}</dd></div>
-        <div><dt>Processing time</dt><dd>{formatDuration(result.processingTimeMs)}</dd></div>
         <div><dt>Detection events</dt><dd>{formatNumber(result.totalDetections)}</dd></div>
+        <div><dt>Processing time</dt><dd>{formatDuration(result.processingTimeMs)}</dd></div>
+        <div><dt>Model used</dt><dd><code>{result.modelKey}</code></dd></div>
       </dl>
 
-      <h3 className="subheading">Detection events by class</h3>
+      <h3 className="subheading">Objects detected</h3>
       {classes.length === 0 ? (
         <EmptyState icon="scan" title="No objects of the selected classes were detected." />
       ) : (

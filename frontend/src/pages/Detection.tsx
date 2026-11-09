@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toApiError, type ApiError } from "../api/client";
 import { createDetection } from "../api/detections";
 import { getModelVersions, listModels } from "../api/models";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
-import { EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
+import { Alert, Disclosure, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { ClassSelector } from "../components/workspace/ClassSelector";
-import { ConfigurationSummary } from "../components/workspace/ConfigurationSummary";
 import { ConfidenceControl, ImageSizeSelector } from "../components/workspace/DetectionSettings";
 import { ModelSelector } from "../components/workspace/ModelSelector";
 import { VideoSourceField } from "../components/workspace/VideoSourceField";
 import { useApiResource } from "../hooks/useApiResource";
 import {
   initialFormState,
+  parseConfidence,
   toRequest,
   validateForm,
   type DetectionFormState,
@@ -204,133 +204,119 @@ export function Detection() {
     }
   };
 
+  const advancedError = Boolean(visible("confidence") || visible("imageSize"));
+  const problems = Object.keys(clientErrors).length;
+  const statusMessage = submitting
+    ? "Submitting the detection job…"
+    : !catalogReady
+      ? "A registered model is needed before submitting."
+      : model && !model.enabled
+        ? "The selected model is disabled and cannot be submitted."
+        : problems === 0
+          ? "Ready to start. The job runs in the background and you will follow its progress next."
+          : attempted
+            ? `${problems} item${problems === 1 ? "" : "s"} to fix before starting`
+            : "Complete the steps above to start.";
+
   return (
     <>
       <PageHeader
-        eyebrow="DETECTION"
-        title="Video Detection Workspace"
-        description="Configure an AI-powered object detection job for a YouTube video."
+        title="New detection"
+        description="Detect objects in a YouTube video with a YOLO model. Paste a link, choose a model, and start."
       />
 
-      <form ref={formRef} className="workspace" onSubmit={submit} noValidate aria-busy={submitting}>
-        <div className="workspace-grid">
-          <div className="workspace-main">
-            <section className="panel" aria-labelledby="source-title">
-              <div className="section-heading">
-                <div>
-                  <h2 id="source-title">Video source</h2>
-                  <p>The worker downloads the video after the job is accepted.</p>
-                </div>
-              </div>
-              <div className="panel-body">
-                <VideoSourceField
-                  value={form.videoUrl}
-                  error={visible("videoUrl")}
-                  disabled={submitting}
-                  onChange={(value) => update("videoUrl", value)}
-                  onBlur={() => setTouched((current) => ({ ...current, videoUrl: true }))}
-                />
-              </div>
-            </section>
+      <form ref={formRef} className="card workspace" onSubmit={submit} noValidate aria-busy={submitting}>
+        <section className="step" aria-labelledby="source-title">
+          <StepHeading number={1} id="source-title" title="Add your video" />
+          <VideoSourceField
+            value={form.videoUrl}
+            error={visible("videoUrl")}
+            disabled={submitting}
+            onChange={(value) => update("videoUrl", value)}
+            onBlur={() => setTouched((current) => ({ ...current, videoUrl: true }))}
+          />
+        </section>
 
-            <section className="panel" aria-labelledby="model-title">
-              <div className="section-heading">
-                <div>
-                  <h2 id="model-title">Model configuration</h2>
-                  <p>Registered YOLO detection models from the model catalog.</p>
-                </div>
-                <Link to="/models" className="button-secondary">
-                  Model catalog
-                  <Icon name="arrow" size={14} />
-                </Link>
-              </div>
-              <div className="panel-body">
-                {catalog.status === "loading" && (
-                  <LoadingSkeleton rows={3} label="Loading the model catalog" />
-                )}
-                {catalog.status === "error" && (
-                  <ErrorState
-                    title="The model catalog could not be loaded"
-                    error={catalog.error}
-                    onRetry={catalog.reload}
-                  />
-                )}
-                {catalog.status === "success" && models.length === 0 && (
-                  <EmptyState icon="models" title="No models are registered.">
-                    Detection jobs need a registered model.
-                    <button type="button" className="button-secondary" onClick={catalog.reload}>
-                      <Icon name="refresh" size={14} />
-                      Reload models
-                    </button>
-                  </EmptyState>
-                )}
-                {catalogReady && (
-                  <>
-                    {enabledCount === 0 && (
-                      <p className="info-note warning" role="status">
-                        <Icon name="alert" size={15} />
-                        <span>
-                          No detection models are enabled. An administrator must prepare and
-                          enable a model before jobs can be submitted (see
-                          <code> docs/yolo-model-management.md</code>).
-                        </span>
-                      </p>
-                    )}
-                    <ModelSelector
-                      models={models}
-                      versions={versions}
-                      choice={choice}
-                      selected={model}
-                      disabled={submitting}
-                      error={!model ? visible("modelKey") : serverErrors.modelKey}
-                      onVersionChange={(version) =>
-                        changeChoice(choiceForVersion(models, version, choice?.size))
-                      }
-                      onSizeChange={(size) => changeChoice(choice ? { ...choice, size } : null)}
-                    />
-                  </>
-                )}
-              </div>
-            </section>
+        <section className="step" aria-labelledby="model-title">
+          <StepHeading
+            number={2}
+            id="model-title"
+            title="Choose a model"
+            aside={
+              <Link to="/models" className="text-link">
+                Browse models
+              </Link>
+            }
+          />
+          {catalog.status === "loading" && <LoadingSkeleton rows={3} label="Loading the model catalog" />}
+          {catalog.status === "error" && (
+            <ErrorState
+              title="The model catalog could not be loaded"
+              error={catalog.error}
+              onRetry={catalog.reload}
+            />
+          )}
+          {catalog.status === "success" && models.length === 0 && (
+            <EmptyState icon="models" title="No models are registered.">
+              <p>Detection jobs need a registered model.</p>
+              <button type="button" className="button-secondary" onClick={catalog.reload}>
+                <Icon name="refresh" size={15} />
+                Reload models
+              </button>
+            </EmptyState>
+          )}
+          {catalogReady && (
+            <>
+              {enabledCount === 0 && (
+                <Alert tone="warning" role="status" title="No models are currently available for detection.">
+                  <p>
+                    Please ask an administrator to enable a model. Setup steps are in{" "}
+                    <code>docs/yolo-model-management.md</code>.
+                  </p>
+                </Alert>
+              )}
+              <ModelSelector
+                models={models}
+                versions={versions}
+                choice={choice}
+                selected={model}
+                disabled={submitting}
+                error={!model ? visible("modelKey") : serverErrors.modelKey}
+                onVersionChange={(version) => changeChoice(choiceForVersion(models, version, choice?.size))}
+                onSizeChange={(size) => changeChoice(choice ? { ...choice, size } : null)}
+              />
+            </>
+          )}
+        </section>
 
-            <section className="panel" aria-labelledby="classes-title">
-              <div className="section-heading">
-                <div>
-                  <h2 id="classes-title">Object classes</h2>
-                  <p>Only the selected classes are detected and counted.</p>
-                </div>
-              </div>
-              <div className="panel-body">
-                <ClassSelector
-                  selected={form.classes}
-                  error={visible("classes")}
-                  disabled={submitting}
-                  onChange={(classes) => {
-                    update("classes", classes);
-                    setTouched((current) => ({ ...current, classes: true }));
-                  }}
-                />
-              </div>
-            </section>
-          </div>
-
-          <aside className="workspace-side" aria-label="Settings and summary">
-            <section className="panel" aria-labelledby="settings-title">
-              <div className="section-heading">
-                <div>
-                  <h2 id="settings-title">Detection settings</h2>
-                </div>
-              </div>
-              <div className="panel-body settings-stack">
-                <ConfidenceControl
-                  value={form.confidence}
-                  error={visible("confidence")}
-                  disabled={submitting}
-                  onChange={(value) => {
-                    update("confidence", value);
-                    setTouched((current) => ({ ...current, confidence: true }));
-                  }}
-                />
+        <section className="step" aria-labelledby="settings-title">
+          <StepHeading number={3} id="settings-title" title="Detection settings" />
+          <ClassSelector
+            selected={form.classes}
+            error={visible("classes")}
+            disabled={submitting}
+            onChange={(classes) => {
+              update("classes", classes);
+              setTouched((current) => ({ ...current, classes: true }));
+            }}
+          />
+          <Disclosure
+            label="Advanced settings"
+            summary={`Confidence ${parseConfidence(form.confidence) ?? "invalid"} · Image size ${form.imageSize} px`}
+            forceOpen={advancedError}
+            className="advanced-settings"
+          >
+            <div className="settings-grid">
+              <ConfidenceControl
+                value={form.confidence}
+                error={visible("confidence")}
+                disabled={submitting}
+                onChange={(value) => {
+                  update("confidence", value);
+                  setTouched((current) => ({ ...current, confidence: true }));
+                }}
+              />
+              <div>
                 <ImageSizeSelector
                   value={form.imageSize}
                   disabled={submitting}
@@ -342,70 +328,94 @@ export function Detection() {
                   </p>
                 )}
               </div>
-            </section>
-            <ConfigurationSummary form={form} model={model} errors={clientErrors} />
-          </aside>
-        </div>
-
-        {banner && (
-          <div className={`submission-banner ${banner.tone}`} role="alert">
-            <Icon name="alert" size={18} />
-            <div>
-              <strong>{banner.title}</strong>
-              <p>{banner.message}</p>
-              <div className="banner-actions">
-                {banner.showHistory && (
-                  <Link to="/history" className="button-secondary">
-                    Open detection history
-                  </Link>
-                )}
-                {banner.offerReload && (
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() => {
-                      setBanner(null);
-                      catalog.reload();
-                    }}
-                  >
-                    <Icon name="refresh" size={14} />
-                    Reload models
-                  </button>
-                )}
-              </div>
             </div>
-          </div>
-        )}
+          </Disclosure>
+        </section>
 
-        <div className="submit-bar">
-          <p className="submit-status" role="status" aria-live="polite">
-            {submitting
-              ? "Submitting the detection job…"
-              : !catalogReady
-                ? "A registered model is needed before submitting."
-                : model && !model.enabled
-                  ? "The selected model is disabled and cannot be submitted."
-                  : "The job runs in the background; you will follow its progress next."}
-          </p>
-          <button
-            type="submit"
-            className="button-primary submit-button"
-            disabled={submitting || !catalogReady}
-          >
-            {submitting ? (
-              <>
-                <Icon name="refresh" size={16} className="spin" />
-                Submitting…
-              </>
-            ) : (
-              <>
-                <Icon name="scan" size={16} />
-                Start detection
-              </>
-            )}
-          </button>
-        </div>
+        <section className="step step-submit" aria-labelledby="start-title">
+          <StepHeading number={4} id="start-title" title="Start processing" />
+          {banner && (
+            <Alert tone={banner.tone} role="alert" title={banner.title}>
+              <p>{banner.message}</p>
+              {(banner.showHistory || banner.offerReload) && (
+                <div className="alert-actions">
+                  {banner.showHistory && (
+                    <Link to="/history" className="button-secondary">
+                      Open detection history
+                    </Link>
+                  )}
+                  {banner.offerReload && (
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => {
+                        setBanner(null);
+                        catalog.reload();
+                      }}
+                    >
+                      <Icon name="refresh" size={15} />
+                      Reload models
+                    </button>
+                  )}
+                </div>
+              )}
+            </Alert>
+          )}
+          <div className="submit-row">
+            <button
+              type="submit"
+              className="button-primary button-large submit-button"
+              disabled={submitting || !catalogReady}
+            >
+              {submitting ? (
+                <>
+                  <Icon name="refresh" size={18} className="spin" />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  Start detection
+                  <Icon name="arrow" size={18} />
+                </>
+              )}
+            </button>
+            <p
+              className={`submit-status ${problems > 0 && attempted && !submitting ? "has-problems" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {statusMessage}
+            </p>
+          </div>
+        </section>
       </form>
     </>
+  );
+}
+
+function StepHeading({
+  number,
+  id,
+  title,
+  aside,
+}: {
+  number: number;
+  id: string;
+  title: string;
+  aside?: ReactNode;
+}) {
+  return (
+    <div className="step-heading">
+      <h2 id={id}>
+        <span className="step-number" aria-hidden="true">
+          {number}
+        </span>
+        <span>
+          <span className="visually-hidden">Step {number}: </span>
+          {title}
+        </span>
+      </h2>
+      {aside}
+    </div>
   );
 }

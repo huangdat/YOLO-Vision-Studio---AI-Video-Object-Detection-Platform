@@ -53,6 +53,11 @@ const urlInput = () => screen.getByLabelText(/YouTube video URL/) as HTMLInputEl
 const submitButton = () => screen.getByRole("button", { name: /Start detection|Submitting/ });
 const versionSelect = () => screen.getByLabelText("YOLO version") as HTMLSelectElement;
 const confidenceInput = () => screen.getByLabelText("Confidence threshold value") as HTMLInputElement;
+const advancedToggle = () => screen.getByRole("button", { name: /Advanced settings/ });
+const openAdvanced = () => {
+  if (advancedToggle().getAttribute("aria-expanded") !== "true") fireEvent.click(advancedToggle());
+};
+const preset = (name: RegExp) => screen.getByRole("radio", { name }) as HTMLInputElement;
 
 async function ready() {
   renderWorkspace();
@@ -71,10 +76,17 @@ describe("Detection workspace", () => {
     expect((screen.getByRole("radio", { name: /Nano/ }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText(/is enabled for detection/)).toBeTruthy();
     expect(urlInput().value).toBe("");
+    // Advanced settings start collapsed and summarise their defaults.
+    expect(advancedToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(advancedToggle().textContent).toContain("Confidence 0.25 · Image size 640 px");
+    expect(screen.queryByLabelText("Confidence threshold value")).toBeNull();
+    openAdvanced();
     expect(confidenceInput().value).toBe("0.25");
     expect((screen.getByLabelText("Inference image size") as HTMLSelectElement).value).toBe("640");
     expect(screen.getByText("5 of 80 selected")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Vehicles (default)" }).getAttribute("aria-pressed")).toBe("true");
+    expect(preset(/^Vehicles/).checked).toBe(true);
+    // The 80-class grid is hidden unless Custom is chosen.
+    expect(screen.queryByRole("group", { name: "COCO object classes" })).toBeNull();
   });
 
   it("shows a catalog error with a retry action", async () => {
@@ -99,11 +111,12 @@ describe("Detection workspace", () => {
   it("never submits when no model is enabled", async () => {
     useCatalog(catalog.map((item) => ({ ...item, enabled: false })));
     await ready();
-    expect(screen.getByText(/No detection models are enabled/)).toBeTruthy();
+    expect(screen.getByText("No models are currently available for detection.")).toBeTruthy();
+    expect(screen.getByText(/ask an administrator to enable a model/)).toBeTruthy();
     expect(versionSelect().value).toBe("YOLOv8");
     fireEvent.change(urlInput(), { target: { value: URL } });
     fireEvent.click(submitButton());
-    expect(screen.getByText("1 item to fix before submitting")).toBeTruthy();
+    expect(screen.getByText("The selected model is disabled and cannot be submitted.")).toBeTruthy();
     expect(createDetection).not.toHaveBeenCalled();
   });
 
@@ -113,7 +126,8 @@ describe("Detection workspace", () => {
     const small = screen.getByRole("radio", { name: /Small/ }) as HTMLInputElement;
     expect(small.checked).toBe(true);
     expect(screen.queryByRole("radio", { name: /Nano/ })).toBeNull();
-    expect(screen.getByText(/is disabled and cannot be submitted. An administrator/)).toBeTruthy();
+    expect(screen.getByText(/is disabled and cannot be used/)).toBeTruthy();
+    expect(small.closest("label")!.textContent).toContain("Disabled");
     expect(screen.getByText("The selected model is disabled and cannot be submitted.")).toBeTruthy();
 
     fireEvent.change(urlInput(), { target: { value: URL } });
@@ -123,7 +137,7 @@ describe("Detection workspace", () => {
     fireEvent.change(versionSelect(), { target: { value: "YOLO11" } });
     expect((screen.getByRole("radio", { name: /Small/ }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("radio", { name: /Nano/ }));
-    expect(screen.getByText("Ready to submit")).toBeTruthy();
+    expect(screen.getByText(/^Ready to start\./)).toBeTruthy();
   });
 
   it("validates the URL on blur without being stricter than the backend", async () => {
@@ -141,14 +155,24 @@ describe("Detection workspace", () => {
 
   it("selects classes with presets, search, chips, and checkboxes", async () => {
     await ready();
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(preset(/^All objects/));
+    expect(screen.getByText("80 of 80 selected")).toBeTruthy();
+    expect(preset(/^All objects/).checked).toBe(true);
+
+    fireEvent.click(preset(/^Vehicles/));
+    expect(screen.getByText("5 of 80 selected")).toBeTruthy();
+
+    // Custom keeps the current selection and opens the searchable list.
+    fireEvent.click(preset(/^Custom/));
+    expect(preset(/^Custom/).checked).toBe(true);
+    expect(screen.getByText("5 of 80 selected")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     expect(screen.getByText("0 of 80 selected")).toBeTruthy();
     expect(screen.getByText("Select at least one object class.")).toBeTruthy();
+    expect(preset(/^Custom/).checked).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "All 80 classes" }));
-    expect(screen.getByText("80 of 80 selected")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Vehicles (default)" }));
+    fireEvent.click(preset(/^Vehicles/));
+    fireEvent.click(preset(/^Custom/));
     fireEvent.click(screen.getByRole("button", { name: "Remove bus" }));
     expect(screen.getByText("4 of 80 selected")).toBeTruthy();
 
@@ -157,7 +181,7 @@ describe("Detection workspace", () => {
     expect(within(grid).getAllByRole("checkbox")).toHaveLength(1);
     fireEvent.click(within(grid).getByRole("checkbox", { name: /Traffic light/ }));
     expect(screen.getByText("5 of 80 selected")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Vehicles (default)" }).getAttribute("aria-pressed")).toBe("false");
+    expect(preset(/^Vehicles/).checked).toBe(false);
 
     fireEvent.change(screen.getByLabelText("Search object classes"), { target: { value: "unicorn" } });
     expect(screen.getByText(/No class matches/)).toBeTruthy();
@@ -165,15 +189,23 @@ describe("Detection workspace", () => {
 
   it("keeps the confidence slider and number in sync and validates the value", async () => {
     await ready();
+    openAdvanced();
     const slider = screen.getByLabelText("Confidence threshold") as HTMLInputElement;
     fireEvent.change(slider, { target: { value: "0.6" } });
     expect(confidenceInput().value).toBe("0.60");
     fireEvent.change(confidenceInput(), { target: { value: "1.5" } });
     expect(screen.getByText("Enter a value from 0 to 1 with at most three decimals.")).toBeTruthy();
-    expect(screen.getByText("Invalid")).toBeTruthy();
+    // An invalid hidden value keeps the section open so the error stays visible.
+    fireEvent.click(advancedToggle());
+    expect(advancedToggle().getAttribute("aria-expanded")).toBe("true");
     fireEvent.change(confidenceInput(), { target: { value: "0.125" } });
     expect(screen.queryByText(/at most three decimals/)).toBeNull();
     expect(slider.value).toBe("0.125");
+    fireEvent.click(advancedToggle());
+    expect(advancedToggle().textContent).toContain("Confidence 0.125");
+    // Collapsing never resets the value.
+    openAdvanced();
+    expect(confidenceInput().value).toBe("0.125");
   });
 
   it("submits exactly the public payload once and opens the job page", async () => {
@@ -182,8 +214,10 @@ describe("Detection workspace", () => {
     const { container } = renderWorkspace();
     await screen.findByLabelText("YOLO version");
     fireEvent.change(urlInput(), { target: { value: ` ${URL} ` } });
+    openAdvanced();
     fireEvent.change(confidenceInput(), { target: { value: "0.4" } });
     fireEvent.change(screen.getByLabelText("Inference image size"), { target: { value: "960" } });
+    fireEvent.click(preset(/^Custom/));
     fireEvent.click(screen.getByRole("checkbox", { name: /Person/ }));
 
     fireEvent.click(submitButton());
@@ -212,6 +246,7 @@ describe("Detection workspace", () => {
     expect(createDetection).not.toHaveBeenCalled();
     expect(screen.getByText("Enter a YouTube video URL.")).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(urlInput()));
+    expect(screen.getByText("1 item to fix before starting")).toBeTruthy();
   });
 
   it("shows backend field errors and preserves the entered values", async () => {
@@ -246,7 +281,7 @@ describe("Detection workspace", () => {
     expect(screen.getByText(/No job was created/)).toBeTruthy();
     useCatalog(catalog.map((item) => ({ ...item, enabled: false })));
     fireEvent.click(screen.getByRole("button", { name: "Reload models" }));
-    expect(await screen.findByText(/No detection models are enabled/)).toBeTruthy();
+    expect(await screen.findByText("No models are currently available for detection.")).toBeTruthy();
     expect(urlInput().value).toBe(URL);
   });
 

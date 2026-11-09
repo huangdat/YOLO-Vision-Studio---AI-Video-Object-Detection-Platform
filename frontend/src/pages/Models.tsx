@@ -1,9 +1,9 @@
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getModel, getModelVersions, listModels } from "../api/models";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
-import { EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
+import { Alert, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { useApiResource } from "../hooks/useApiResource";
 import { formatDateTime, MODEL_SIZES, sizeName } from "../lib/format";
 import type { ModelCatalogFilter, ModelConfig } from "../types/models";
@@ -43,6 +43,13 @@ export function Models() {
     { enabled: Boolean(selectedKey) },
   );
   const filtering = Boolean(filter.version || filter.size || filter.enabled);
+  const detailsRef = useRef<HTMLElement>(null);
+  // Bring the details into view when a card is chosen; the grid can be long.
+  useEffect(() => {
+    if (!selectedKey) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    detailsRef.current?.scrollIntoView?.({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+  }, [selectedKey]);
   const ids = { version: useId(), size: useId(), enabled: useId() };
 
   const update = (key: string, value: string) => {
@@ -56,20 +63,19 @@ export function Models() {
     <>
       <PageHeader
         title="Models"
-        description="The registered YOLO object detection models and their administrative status."
+        description="YOLO object detection models registered in your workspace."
       />
 
-      <p className="info-note">
-        <Icon name="alert" size={15} />
-        <span>
-          <strong>Enabled</strong> means an administrator allows the model for new detection
-          jobs. It does not confirm that a worker has prepared its weights; a worker without
-          them reports <code>MODEL_NOT_PREPARED</code>. All models start disabled.
-        </span>
-      </p>
+      <Alert tone="info">
+        <p>
+          <strong>Enabled</strong> models can be selected for new detections. Enabling is an
+          administrative setting: it does not confirm that a worker has prepared its weights (a
+          worker without them reports <code>MODEL_NOT_PREPARED</code>).
+        </p>
+      </Alert>
 
-      <section className="panel" aria-labelledby="catalog-title">
-        <div className="section-heading">
+      <section className="card page-section" aria-labelledby="catalog-title">
+        <div className="card-header">
           <div>
             <h2 id="catalog-title">Model catalog</h2>
             <p aria-live="polite">
@@ -126,7 +132,7 @@ export function Models() {
           </label>
           <button
             type="button"
-            className="button-secondary"
+            className="button-ghost"
             onClick={() => {
               const next = new URLSearchParams(params);
               ["version", "size", "enabled"].forEach((key) => next.delete(key));
@@ -138,7 +144,7 @@ export function Models() {
           </button>
         </form>
 
-        <div className="panel-body" aria-busy={catalog.status === "loading"}>
+        <div aria-busy={catalog.status === "loading"}>
           {catalog.status === "error" && (
             <ErrorState
               title="The model catalog could not be loaded"
@@ -172,20 +178,24 @@ export function Models() {
       </section>
 
       {selectedKey && (
-        <section className="panel model-details" aria-labelledby="model-details-title">
-          <div className="section-heading">
+        <section
+          ref={detailsRef}
+          className="card page-section model-details"
+          aria-labelledby="model-details-title"
+        >
+          <div className="card-header">
             <div>
               <h2 id="model-details-title">Model details</h2>
               <p>
-                <code>GET /api/v1/models/{selectedKey}</code>
+                <code>{selectedKey}</code>
               </p>
             </div>
-            <button type="button" className="button-secondary" onClick={() => update("model", "")}>
+            <button type="button" className="button-ghost" onClick={() => update("model", "")}>
               <Icon name="close" size={14} />
               Close
             </button>
           </div>
-          <div className="panel-body">
+          <div>
             {selected.status === "loading" && <LoadingSkeleton rows={3} label="Loading model details" />}
             {selected.status === "error" && (
               <ErrorState
@@ -226,27 +236,24 @@ function ModelCard({
     <li className={`model-card ${selected ? "selected" : ""}`}>
       <div className="model-card-top">
         <h3>
-          <code>{model.modelKey}</code>
+          {model.version} {sizeName(model.modelSize)}
         </h3>
         <span className={`availability ${model.enabled ? "enabled" : "disabled"}`}>
+          <span className="status-dot" aria-hidden="true" />
           {model.enabled ? "Enabled" : "Disabled"}
         </span>
       </div>
-      <dl className="model-facts">
-        <div><dt>Version</dt><dd>{model.version}</dd></div>
-        <div><dt>Size</dt><dd>{sizeName(model.modelSize)}</dd></div>
-        <div><dt>Task</dt><dd>{model.taskType}</dd></div>
-        <div><dt>Checkpoint</dt><dd><code>{model.weightsFilename}</code></dd></div>
-      </dl>
+      <p className="model-key">
+        Model <code>{model.modelKey}</code>
+      </p>
       <button
         type="button"
-        className="table-link"
+        className="button-secondary model-card-action"
         onClick={onSelect}
         aria-pressed={selected}
         aria-label={`Details for ${model.modelKey}`}
       >
-        Details
-        <Icon name="arrow" size={14} />
+        View details
       </button>
     </li>
   );

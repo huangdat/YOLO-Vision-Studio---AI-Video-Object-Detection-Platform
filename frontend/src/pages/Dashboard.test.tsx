@@ -86,12 +86,15 @@ describe("Dashboard", () => {
     expect(screen.getByRole("link", { name: /View all history/ }).getAttribute("href")).toBe("/history");
   });
 
-  it("summarises model families in catalog order", async () => {
+  it("welcomes the user with a primary Start new detection action", async () => {
     renderDashboard();
-    const list = await screen.findByRole("list");
-    const families = within(list).getAllByRole("listitem").map((item) => item.querySelector("strong")!.textContent);
-    expect(families).toEqual(["YOLOv8", "YOLO11"]);
-    expect(within(list).getByText("1 models")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Welcome to YOLO Vision Studio" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Start new detection/ }).getAttribute("href")).toBe("/detection");
+    expect(screen.getByRole("link", { name: "View history" }).getAttribute("href")).toBe("/history");
+    // The decorative model-family list was removed; the catalog is summarised by one KPI.
+    await screen.findByRole("table", { name: "Recent detection jobs" });
+    expect(screen.queryByRole("heading", { name: "Available YOLO families" })).toBeNull();
+    expect(screen.queryByText("1 models")).toBeNull();
   });
 
   it("shows loading placeholders before data arrives", () => {

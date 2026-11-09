@@ -59,11 +59,11 @@ export function History() {
     <>
       <PageHeader
         title="History"
-        description="Every detection job, newest first. Select a job to see its progress and results."
+        description="All your detection jobs, newest first. Open a job to see its progress and results."
       />
 
-      <section className="panel" aria-labelledby="history-title">
-        <div className="section-heading">
+      <section className="card" aria-labelledby="history-title">
+        <div className="card-header">
           <div>
             <h2 id="history-title">Detection jobs</h2>
             <p aria-live="polite">
@@ -125,7 +125,7 @@ export function History() {
           </label>
           <button
             type="button"
-            className="button-secondary"
+            className="button-ghost"
             onClick={() => update({ status: undefined, model: undefined })}
             disabled={!filtering}
           >
@@ -133,7 +133,7 @@ export function History() {
           </button>
         </form>
 
-        <div className="panel-body" aria-busy={history.status === "loading"}>
+        <div aria-busy={history.status === "loading"}>
           {history.status === "error" && (
             <ErrorState
               title="Detection history could not be loaded"

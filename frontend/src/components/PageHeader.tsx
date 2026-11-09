@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
+/** One page title per route, with optional supporting text and actions. */
 export function PageHeader({
-  eyebrow = "YOUR VISION WORKSPACE",
+  eyebrow,
   title,
   description,
   aside,
@@ -13,12 +14,12 @@ export function PageHeader({
 }) {
   return (
     <div className="page-heading">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
+      <div className="page-heading-text">
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         {description && <p className="page-description">{description}</p>}
       </div>
-      {aside}
+      {aside && <div className="page-heading-actions">{aside}</div>}
     </div>
   );
 }
