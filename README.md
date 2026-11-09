@@ -4,6 +4,16 @@
 
 A modular foundation for processing videos with YOLO models. Phase 1 provides a responsive dashboard, a Spring Boot API, a CPU-compatible Python service, and local infrastructure. The dashboard reports the actual backend connection state.
 
+## 🎬 Project Demo
+
+Watch YOLO Vision Studio in action — from configuring a YOLO model and submitting a video detection job to monitoring progress, viewing detection results, and downloading the processed video.
+
+[![Watch the YOLO Vision Studio Demo](docs/images/demo-thumbnail.png)](https://youtu.be/3vpkPtPq8nk)
+
+**▶ [Watch the Full Demo on YouTube](https://youtu.be/3vpkPtPq8nk)**
+
+## Development history
+
 Phase 02 adds the PostgreSQL schema, Flyway migrations, JPA entities, repositories, and response DTO foundations for model configurations, detection jobs, and result metadata. The initial `yolo26s` database metadata remains disabled. See the [database design and persistence testing guide](docs/database-design.md).
 
 Phase 03 adds an independent Python CLI/library for local video and authorized YouTube inputs, streaming YOLO26s inference, bounding-box annotations, cumulative detection statistics, progress callbacks, H.264 MP4 export, and JSON results. CPU inference is the default container setup; model weights load only after explicit processing or preparation. See the [AI engine guide](docs/ai-detection-engine.md) for optional dependency installation, FFmpeg setup, CLI commands, and the explicit real inference smoke test.
