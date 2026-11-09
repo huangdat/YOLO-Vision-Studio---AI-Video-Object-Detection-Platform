@@ -116,7 +116,7 @@ The supporting evidence:
 - a real full-stack Docker E2E with YOLO11n inference, browser playback, and byte-verified downloads passed;
 - failure and recovery tests passed (worker SIGKILL, broker, storage, and database outages).
 
-**Not ready for public or multi-user deployment.** That is blocked on authentication, authorization and job ownership, rate limiting, and TLS (see the deployment guide, § 28). The new CI workflow had not yet been verified on GitHub when this was written.
+**Not ready for public or multi-user deployment.** That is blocked on authentication, authorization and job ownership, rate limiting, and TLS (see the deployment guide, § 28). The new CI workflow passed all four jobs on its first GitHub run (run 42570438539).
 
 ## Phase 1 boundaries
 

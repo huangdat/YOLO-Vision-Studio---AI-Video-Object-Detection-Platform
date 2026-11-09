@@ -53,7 +53,7 @@ Every Docker validation ran in a **separate Compose project**, `yolo-vision-stud
 | `docker compose config` (development and production layouts, user `.env`, read-only) | **PASS** | |
 | `actionlint` 1.7.7 on `ci.yml` | **PASS** | Run once from its container image; not added to the project |
 | ESLint | **NOT RUN** | Not configured in this project |
-| GitHub Actions remote run | **NOT VERIFIED** | The workflow is new; see § 9 |
+| GitHub Actions remote run | **PASS** | Run 42570438539 on commit `eccc9dc`: all four jobs succeeded; see § 9 |
 
 ## 4. Docker deployment (isolated project)
 
@@ -188,7 +188,7 @@ See [deployment-guide.md § 28](deployment-guide.md#28-production-deployment-pre
   - **integration:** builds the pinned MinIO image, then `./mvnw -B -Ppostgres-it verify`.
 - **Permissions and limits:** `contents: read` only; no secrets; no YouTube downloads; no YOLO weights.
 - **Local validation:** `actionlint` passes, and every command it runs passed locally (§ 3).
-- **Remote status:** **NOT VERIFIED** at the time of writing. The first remote run starts when this commit is pushed; a successful local run does not prove the remote one.
+- **Remote status: PASS.** The first run on GitHub ([run 42570438539](https://github.com/huangdat/YOLO-Vision-Studio---AI-Video-Object-Detection-Platform/actions/runs/42570438539), commit `eccc9dc`) completed successfully: frontend, backend, AI worker, and backend integration (PostgreSQL, RabbitMQ, MinIO) all succeeded.
 
 ## 10. Release readiness
 
@@ -207,7 +207,7 @@ See [deployment-guide.md § 28](deployment-guide.md#28-production-deployment-pre
 | Documentation | ✅ | Deployment guide, runbook, this report |
 | Security defaults | ✅ local / ❌ public | Localhost-only, hardened edge; no authentication (§ 6) |
 | Operational recovery | ✅ | § 7 |
-| CI | ⚠️ | Defined and locally validated; remote run not yet verified |
+| CI | ✅ | Locally validated, and the first remote run passed all four jobs |
 
 **Classification: READY FOR CONTROLLED SELF-HOSTED USE.** This covers a single trusted user or a trusted private network, using `compose.production.yaml` on a localhost or private bind, which also covers local demos.
 
@@ -217,7 +217,7 @@ Every required automated, integration, end-to-end, browser, security, and failur
 
 - Live YouTube downloading was not tested (stubbed download step).
 - Headless Chrome only; other browsers and physical devices were not tested.
-- The remote GitHub Actions run was not verified before pushing.
+- CI covers the automated suites only; the Docker E2E and browser checks in this report were run locally.
 - Docker Desktop on hosts with about 14 GB of RAM can restart its VM under combined load (§ 8).
 - Multi-range HTTP requests return the full body; `result.json` is capped at 2 MiB (by design, Phase 09).
 - The five remaining dependency advisories need major upgrades (§ 6).
