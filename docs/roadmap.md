@@ -81,7 +81,17 @@ The Detection route is now the Video Detection Workspace:
 
 No backend, worker, or schema change was needed. See [video-detection-workspace.md](video-detection-workspace.md) and [phase-08-validation.md](phase-08-validation.md).
 
-Phase 09 adds detected-video preview and download.
+## Phase 09 progress
+
+Completed jobs can now be watched and downloaded:
+
+- **Backend:** Spring Boot streams the annotated MP4 from the private MinIO bucket. Keys come from database records only, and only after job, status, result, and key-ownership checks. Single HTTP Range requests (206/416) make seeking work.
+- **Downloads:** the MP4 and the worker's original `result.json` are available as safe attachments.
+- **Frontend:** the job page has a native player with loading, missing-artifact, and storage-outage states, plain download links, and a raw JSON viewer.
+
+The bucket stays private, and no migration was needed. See [video-preview-download.md](video-preview-download.md) and [phase-09-validation.md](phase-09-validation.md).
+
+Phase 10 covers final integration testing, security hardening, and deployment readiness.
 
 ## Phase 1 boundaries
 

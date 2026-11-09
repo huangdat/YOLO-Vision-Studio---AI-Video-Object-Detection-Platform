@@ -82,7 +82,7 @@ export function Dashboard({
         aside={
           <span className="phase-pill">
             <span />
-            Phase 08 · Detection workspace
+            Phase 09 · Video preview
           </span>
         }
       />

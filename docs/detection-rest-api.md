@@ -150,7 +150,7 @@ Results are sorted by `createdAt` descending, then `jobId` descending for a stab
 
 - **Counts are bounding-box detections summed over all processed frames, not unique objects.** A bus visible in 60 frames counts 60 times.
 - All values come from the persisted `DetectionResult`.
-- Object keys and MinIO locations are not exposed. `outputVideoAvailable` only reports that the annotated video was stored. Preview and download APIs belong to a later phase.
+- Object keys and MinIO locations are not exposed. `outputVideoAvailable` only reports that an annotated-video key was recorded. The artifacts themselves are served by the Phase 09 endpoints in [video-preview-download.md](video-preview-download.md).
 
 | Situation | Response |
 | --- | --- |
@@ -278,5 +278,5 @@ The Vite proxy (`/api`) and the CORS configuration (now `GET`, `POST`, and `OPTI
 
 - No authentication, ownership, or rate limiting; development use only (§2).
 - SSE reports snapshots, not replayable history. Transitions faster than the poll interval may be skipped. Each backend instance polls independently, with one query per instance per tick.
-- No cancellation, retry, or delete endpoints, and no video preview or download links.
+- No cancellation, retry, or delete endpoints. (Video preview and download endpoints were added in Phase 09.)
 - Live YouTube downloading through this API has not been validated, because no authorized test URL was available. Validation used a controlled stand-in for the downloader (see the validation report).

@@ -14,15 +14,15 @@ flowchart TD
     rabbit -->|vision.detection.events.backend| backend
     worker -->|detected.mp4 + result.json| minio[(MinIO videos)]
     worker -->|DetectionPipeline| pipeline[Video processing pipeline]
-    backend -.->|Future download links| minio
+    backend -->|Read-only ranged GET of completed artifacts| minio
 ```
 
 Solid arrows describe current integrations; dashed arrows describe later phases. Since Phase 05, the backend and the worker communicate only through RabbitMQ: there is no worker HTTP client and no synchronous inference. The FastAPI health service is unchanged and loads no AI libraries at startup. The separate consumer process loads a model only when a job requires one. The worker stores job artifacts in MinIO; the backend records only their object keys. See [asynchronous-job-processing.md](asynchronous-job-processing.md).
 
 | Component | Responsibilities |
 | --- | --- |
-| Frontend | Dashboard statistics, model catalog, job history, job details with live SSE progress, backend status, and the Detection Workspace that submits jobs through `POST /api/v1/detections` |
-| Backend | REST APIs (system, models, detections), SSE progress, validation, problem-detail errors, CORS, persistence, migrations, outbox publication, event-driven job lifecycle |
+| Frontend | Dashboard statistics, model catalog, job history, job details with live SSE progress, the annotated-video player, downloads, and the result JSON viewer, backend status, and the Detection Workspace that submits jobs through `POST /api/v1/detections` |
+| Backend | REST APIs (system, models, detections), SSE progress, artifact streaming with HTTP Range support from private MinIO, validation, problem-detail errors, CORS, persistence, migrations, outbox publication, event-driven job lifecycle |
 | AI worker | Health service, CLI, and a RabbitMQ consumer that runs the detection engine and stores artifacts |
 | PostgreSQL | Backend metadata and Flyway migration history |
 | RabbitMQ | Durable quorum queues for job commands and worker events, with dead-lettering |
@@ -82,7 +82,7 @@ Phase 04 replaces the single-model allowlist with `model_registry.py`, which lis
 
 Read-only model catalog, served by Spring Boot from PostgreSQL (works while the worker is offline): `GET /api/v1/models` (optional `version`, `size`, `enabled` filters), `GET /api/v1/models/versions`, and `GET /api/v1/models/{modelKey}`. See [yolo-model-management.md](yolo-model-management.md#5-spring-boot-rest-api-read-only) for response shapes and errors.
 
-The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Detection job APIs (Phase 06): `POST /api/v1/detections` (202), `GET /api/v1/detections` (paged history), `GET /api/v1/detections/{jobId}`, `GET /api/v1/detections/{jobId}/result`, and the SSE stream `GET /api/v1/detections/{jobId}/events`. SSE reads persisted state through one shared poller, so RabbitMQ stays internal. All errors are RFC 9457 problems with a stable `code`. See [detection-rest-api.md](detection-rest-api.md). OpenAPI is served at `/api/v1/openapi`. Video download contracts belong to later phases. The RabbitMQ message contracts (schema version 1) are documented in [asynchronous-job-processing.md](asynchronous-job-processing.md#3-message-contracts-schema-version-1).
+The backend also exposes `/actuator/health`, `/actuator/health/liveness`, and `/actuator/health/readiness`. Detection job APIs (Phase 06): `POST /api/v1/detections` (202), `GET /api/v1/detections` (paged history), `GET /api/v1/detections/{jobId}`, `GET /api/v1/detections/{jobId}/result`, and the SSE stream `GET /api/v1/detections/{jobId}/events`. SSE reads persisted state through one shared poller, so RabbitMQ stays internal. All errors are RFC 9457 problems with a stable `code`. See [detection-rest-api.md](detection-rest-api.md). OpenAPI is served at `/api/v1/openapi`. Phase 09 adds the artifact endpoints `GET /api/v1/detections/{jobId}/video` (inline, single-range 206/416), `…/video/download`, `…/result.json`, and `…/result.json/download`, streamed from the private bucket with keys taken only from database records (see [video-preview-download.md](video-preview-download.md)). The RabbitMQ message contracts (schema version 1) are documented in [asynchronous-job-processing.md](asynchronous-job-processing.md#3-message-contracts-schema-version-1).
 
 ## Deployment and persistence
 

@@ -1,10 +1,13 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
+import { detectionVideoDownloadUrl, resultJsonDownloadUrl } from "../api/artifacts";
 import { ApiError } from "../api/client";
 import { getDetection, getDetectionResult, isJobId } from "../api/detections";
 import { Icon } from "../components/Icon";
 import { JobStatusBadge } from "../components/JobStatusBadge";
 import { PageHeader } from "../components/PageHeader";
+import { DetectionVideoPlayer } from "../components/results/DetectionVideoPlayer";
+import { ResultJsonViewer } from "../components/results/ResultJsonViewer";
 import { ProgressBar } from "../components/ProgressBar";
 import { EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { useApiResource, type Resource } from "../hooks/useApiResource";
@@ -178,7 +181,7 @@ export function DetectionDetails() {
         <JobTimeline job={loaded} />
       </div>
 
-      {completed && <ResultPanel result={result} />}
+      {completed && <ResultPanel jobId={loaded.jobId} result={result} />}
     </DetailsShell>
   );
 }
@@ -256,6 +259,76 @@ function JobTimeline({ job }: { job: DetectionJob }) {
 }
 
 function ResultPanel({
+  jobId,
+  result,
+}: {
+  jobId: string;
+  result: Resource<DetectionResultMetadata> & { reload: () => void };
+}) {
+  return (
+    <>
+      {result.status === "success" && <ResultMedia jobId={jobId} result={result.data} />}
+      <ResultStatisticsPanel result={result} />
+      {result.status === "success" && result.data.resultMetadataAvailable && (
+        <section className="panel" aria-labelledby="json-title">
+          <div className="section-heading">
+            <div>
+              <h2 id="json-title">Result JSON</h2>
+              <p>The raw result file stored by the AI worker.</p>
+            </div>
+          </div>
+          <div className="panel-body">
+            <ResultJsonViewer jobId={jobId} />
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+/** Video preview and downloads; only for completed jobs whose metadata records a video. */
+function ResultMedia({ jobId, result }: { jobId: string; result: DetectionResultMetadata }) {
+  const [missing, setMissing] = useState(false);
+  const videoAvailable = result.outputVideoAvailable && !missing;
+  return (
+    <section className="panel" aria-labelledby="video-title">
+      <div className="section-heading">
+        <div>
+          <h2 id="video-title">Detected video</h2>
+          <p>
+            The annotated MP4 produced by the AI worker, streamed through the backend from
+            private storage.
+          </p>
+        </div>
+      </div>
+      <div className="panel-body">
+        {result.outputVideoAvailable ? (
+          <DetectionVideoPlayer jobId={jobId} onMissing={() => setMissing(true)} />
+        ) : (
+          <EmptyState icon="film" title="No annotated video was recorded for this job." />
+        )}
+        {(videoAvailable || result.resultMetadataAvailable) && (
+          <div className="media-actions">
+            {videoAvailable && (
+              <a className="button-primary" href={detectionVideoDownloadUrl(jobId)} download>
+                <Icon name="download" size={16} />
+                Download detected video
+              </a>
+            )}
+            {result.resultMetadataAvailable && (
+              <a className="button-secondary" href={resultJsonDownloadUrl(jobId)} download>
+                <Icon name="download" size={14} />
+                Download JSON
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ResultStatisticsPanel({
   result,
 }: {
   result: Resource<DetectionResultMetadata> & { reload: () => void };
@@ -312,15 +385,6 @@ function ResultStatistics({ result }: { result: DetectionResultMetadata }) {
           ))}
         </ul>
       )}
-
-      <p className="info-note">
-        <Icon name="film" size={15} />
-        <span>
-          {result.outputVideoAvailable
-            ? "The annotated video is stored. Video preview and download will be available in a future phase."
-            : "No annotated video was recorded for this job."}
-        </span>
-      </p>
     </>
   );
 }

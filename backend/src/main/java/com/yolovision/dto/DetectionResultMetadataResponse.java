@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * Result metadata of a COMPLETED job. Counts are bounding-box detections summed over all
  * processed frames (countSemantics), not unique objects. Storage locations are not exposed;
- * download and preview APIs belong to a later phase.
+ * the artifacts themselves are served by DetectionArtifactController (Phase 09).
  */
 public record DetectionResultMetadataResponse(
         UUID jobId,

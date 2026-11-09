@@ -20,7 +20,8 @@ export type IconName =
   | "chevronLeft"
   | "chevronRight"
   | "activity"
-  | "film";
+  | "film"
+  | "download";
 
 const paths: Record<IconName, React.ReactNode> = {
   vision: (
@@ -92,6 +93,7 @@ const paths: Record<IconName, React.ReactNode> = {
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  download: <path d="M12 4v11m-5-5 5 5 5-5M5 20h14" />,
   film: (
     <>
       <rect x="3" y="3" width="18" height="18" rx="2" />

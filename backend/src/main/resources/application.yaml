@@ -66,6 +66,15 @@ app:
     reconnect-delay: 3s
   detection-api:
     max-request-bytes: ${DETECTION_API_MAX_REQUEST_BYTES:16384}
+  storage:
+    # Private MinIO bucket written by the worker; the backend only reads completed artifacts.
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:yolovision}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:videos}
+    region: ${MINIO_REGION:}
+    connect-timeout: ${MINIO_CONNECT_TIMEOUT:5s}
+    read-timeout: ${MINIO_READ_TIMEOUT:30s}
   messaging:
     command-exchange: ${RABBITMQ_COMMAND_EXCHANGE:vision.detection.commands}
     command-queue: ${RABBITMQ_COMMAND_QUEUE:vision.detection.jobs}

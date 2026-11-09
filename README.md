@@ -30,7 +30,15 @@ Phase 08 adds the **Video Detection Workspace** at `/detection`:
 - Choose COCO classes (vehicles by default), the confidence threshold, and the image size.
 - Submit through `POST /api/v1/detections`, then follow live progress on the job page.
 
-Submissions are protected against duplicates and never retried automatically. See the [Video Detection Workspace guide](docs/video-detection-workspace.md). Authentication and video preview/download (Phase 09) remain future work.
+Submissions are protected against duplicates and never retried automatically. See the [Video Detection Workspace guide](docs/video-detection-workspace.md).
+
+Phase 09 adds **video preview and downloads** for completed jobs. The job page includes:
+
+- a native HTML5 player with seeking, streamed by Spring Boot from the private MinIO bucket with HTTP Range support;
+- *Download detected video* and *Download JSON*;
+- a viewer for the worker's original `result.json`.
+
+The browser never receives storage URLs or credentials, and object keys come only from database records. See the [video preview and download guide](docs/video-preview-download.md). **These endpoints are development-only until authentication, authorization, and rate limiting exist.**
 
 ## Project structure
 
@@ -152,6 +160,8 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Phase 07 validation results](docs/phase-07-validation.md)
 - [Video Detection Workspace](docs/video-detection-workspace.md)
 - [Phase 08 validation results](docs/phase-08-validation.md)
+- [Video preview, streaming, and downloads](docs/video-preview-download.md)
+- [Phase 09 validation results](docs/phase-09-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

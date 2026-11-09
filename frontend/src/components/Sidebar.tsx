@@ -68,8 +68,8 @@ export function Sidebar({ open, close }: { open: boolean; close: () => void }) {
               <Icon name="code" />
             </span>
             <div>
-              <strong>Video detection workspace</strong>
-              <p>Phase 08 · Submit detection jobs</p>
+              <strong>Video preview &amp; downloads</strong>
+              <p>Phase 09 · Detection results</p>
             </div>
             <div className="phase-progress">
               <span />

@@ -29,6 +29,12 @@ function progressValue() {
   return screen.getByRole("progressbar", { name: "Job progress" }).getAttribute("aria-valuenow");
 }
 
+/** The progress stream opens in a passive effect; wait for it instead of racing React's flush. */
+async function openStream(): Promise<FakeEventSource> {
+  await waitFor(() => expect(FakeEventSource.open()).toHaveLength(1));
+  return FakeEventSource.open()[0];
+}
+
 describe("Detection details page", () => {
   it("shows a pending job without claiming success and opens a live stream", async () => {
     vi.mocked(getDetection).mockResolvedValue(job({ status: "PENDING", progress: 0, startedAt: null }));
@@ -37,7 +43,8 @@ describe("Detection details page", () => {
     expect(await screen.findByText("Pending")).toBeTruthy();
     expect(progressValue()).toBe("0");
     expect(screen.queryByText(/Detection completed/)).toBeNull();
-    expect(FakeEventSource.open()).toHaveLength(1);
+    // The stream opens in a passive effect; wait for it rather than racing React's flush.
+    await waitFor(() => expect(FakeEventSource.open()).toHaveLength(1));
     expect(await screen.findByText("Connecting to live updates…")).toBeTruthy();
     expect(getDetectionResult).not.toHaveBeenCalled();
   });
@@ -51,8 +58,8 @@ describe("Detection details page", () => {
     expect(screen.getByText("0.25")).toBeTruthy();
     expect(screen.getAllByText("yolo11n").length).toBeGreaterThan(0);
 
+    const source = await openStream();
     act(() => {
-      const [source] = FakeEventSource.open();
       source.open();
       source.emit("detection.progress", progressEvent("ENCODING", 85, "2026-11-08T11:13:37Z"));
     });
@@ -68,9 +75,10 @@ describe("Detection details page", () => {
     vi.mocked(getDetectionResult).mockResolvedValue(result());
     renderJob();
     await screen.findByText("Detecting");
+    const source = await openStream();
 
     act(() =>
-      FakeEventSource.open()[0].emit(
+      source.emit(
         "detection.completed",
         progressEvent("COMPLETED", 100, "2026-11-08T11:13:38Z"),
       ),
@@ -88,8 +96,14 @@ describe("Detection details page", () => {
     expect(screen.getByText("Car detection events")).toBeTruthy();
     expect(screen.getByText(/not unique objects/)).toBeTruthy();
     expect(screen.queryByText(/unique (cars|buses)/i)).toBeNull();
-    expect(screen.getByText(/Video preview and download will be available in a future phase/)).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /download/i })).toBeNull();
+    // Phase 09: the stored video and downloads replace the former "future phase" note.
+    expect(screen.queryByText(/future phase/)).toBeNull();
+    expect(screen.getByLabelText("Annotated detection video").getAttribute("src")).toBe(
+      `/api/v1/detections/${JOB_ID}/video`,
+    );
+    expect(
+      screen.getByRole("link", { name: "Download detected video" }).getAttribute("href"),
+    ).toBe(`/api/v1/detections/${JOB_ID}/video/download`);
   });
 
   it("supports arbitrary class names and no detections", async () => {
@@ -165,7 +179,7 @@ describe("Detection details after submission", () => {
 
     expect(await screen.findByText(/Job submitted\. The backend accepted it/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Start another detection" }).getAttribute("href")).toBe("/detection");
-    expect(FakeEventSource.open()).toHaveLength(1);
+    await waitFor(() => expect(FakeEventSource.open()).toHaveLength(1));
   });
 
   it("shows no notice for ordinary visits or another job's state", async () => {

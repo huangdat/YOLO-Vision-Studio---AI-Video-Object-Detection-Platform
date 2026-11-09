@@ -130,6 +130,49 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "The job is completed but its result metadata is unavailable.", null);
     }
 
+    @ExceptionHandler(ArtifactNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleArtifactNotFound(ArtifactNotFoundException exception) {
+        // The internal reason is logged by the artifact service and never returned.
+        ResponseEntity<ProblemDetail> response = problem(HttpStatus.NOT_FOUND, "ARTIFACT_NOT_FOUND",
+                "The requested artifact is not available for this job.", null);
+        response.getBody().setTitle("Artifact not available");
+        return response;
+    }
+
+    @ExceptionHandler(ArtifactInvalidException.class)
+    public ResponseEntity<ProblemDetail> handleArtifactInvalid(ArtifactInvalidException exception) {
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "ARTIFACT_INVALID",
+                "The stored artifact cannot be served.", null);
+    }
+
+    @ExceptionHandler(StorageUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleStorageUnavailable(StorageUnavailableException exception) {
+        ResponseEntity<ProblemDetail> response = problem(HttpStatus.SERVICE_UNAVAILABLE, "STORAGE_UNAVAILABLE",
+                exception.getMessage(), null);
+        return ResponseEntity.status(response.getStatusCode()).header(HttpHeaders.RETRY_AFTER, "10")
+                .body(response.getBody());
+    }
+
+    @ExceptionHandler(RangeNotSatisfiableException.class)
+    public ResponseEntity<ProblemDetail> handleRangeNotSatisfiable(RangeNotSatisfiableException exception) {
+        ResponseEntity<ProblemDetail> response = problem(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+                "RANGE_NOT_SATISFIABLE", exception.getMessage(), null);
+        return ResponseEntity.status(response.getStatusCode())
+                .header(HttpHeaders.CONTENT_RANGE, "bytes */" + exception.getSize())
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .body(response.getBody());
+    }
+
+    /**
+     * The response is already committed, so no problem body can be written. Rethrowing lets the
+     * servlet container abort the connection; the client then sees an incomplete transfer.
+     */
+    @ExceptionHandler(ArtifactTransferException.class)
+    public void handleArtifactTransfer(ArtifactTransferException exception) {
+        LOG.warn("Artifact transfer aborted: {}", exception.getMessage());
+        throw exception;
+    }
+
     @ExceptionHandler(StreamCapacityExceededException.class)
     public ResponseEntity<ProblemDetail> handleStreamCapacity(StreamCapacityExceededException exception) {
         ResponseEntity<ProblemDetail> response = problem(HttpStatus.SERVICE_UNAVAILABLE, "STREAM_CAPACITY_EXCEEDED",

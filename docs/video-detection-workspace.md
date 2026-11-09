@@ -135,4 +135,4 @@ See [phase-08-validation.md](phase-08-validation.md).
 - **COCO classes only.** Custom models with other class sets are not supported in this phase.
 - **No live YouTube validation.** The URL check is syntactic; availability, restrictions, and permissions are discovered by the worker.
 - **No drafts.** Form values are not persisted across reloads.
-- **No preview or download.** Detected-video preview and download are Phase 09.
+- **Preview and download** of completed jobs are on the job page since Phase 09 (see [video-preview-download.md](video-preview-download.md)).

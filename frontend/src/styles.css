@@ -2385,3 +2385,121 @@ h1 {
 .workspace-side > .panel:last-child {
   margin-bottom: 0;
 }
+
+/* Detection result media (Phase 09) */
+.video-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 200px;
+  overflow: hidden;
+  background: #05070c;
+  border: 1px solid #202635;
+  border-radius: 9px;
+}
+.detection-video {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  background: #000;
+}
+.video-loading {
+  position: absolute;
+  inset: auto 0 50% 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 11px;
+  color: #a0a7bd;
+  pointer-events: none;
+}
+.video-meta {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 9px;
+  color: #d3d7e5;
+  background: #0b0e17cc;
+  border-radius: 5px;
+  pointer-events: none;
+}
+.video-problem {
+  gap: 8px;
+  padding: 28px 18px;
+  text-align: center;
+  color: #e9cfae;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.video-problem svg {
+  color: #f4b97a;
+}
+.video-problem p {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  max-width: 460px;
+}
+.media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.json-result .media-actions {
+  margin-top: 0;
+}
+.media-actions .button-primary {
+  gap: 9px;
+}
+.json-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  min-width: 0;
+}
+.json-panel code {
+  font-family: "Cascadia Code", "Consolas", monospace;
+}
+.json-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.json-copy-status {
+  font-size: 10px;
+  color: #f4b97a;
+}
+.json-viewer {
+  max-height: 420px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: #c3c9de;
+  white-space: pre;
+  background: #0b0e17;
+  border: 1px solid #202635;
+  border-radius: 8px;
+}
+.json-viewer:focus-visible {
+  outline: 2px solid #8f7cff;
+  outline-offset: 1px;
+}
+@media (max-width: 580px) {
+  .media-actions > * {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .detection-video {
+    max-height: 50vh;
+  }
+}

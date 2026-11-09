@@ -1,6 +1,6 @@
 # Frontend dashboard
 
-Phase 07 connects the React dashboard to the Spring Boot APIs built in Phases 04–06. Every number, row, and status shown comes from the backend; nothing is invented when a request fails. Job submission (the Detection Workspace) was added in Phase 08 and is described in [video-detection-workspace.md](video-detection-workspace.md). Video preview or download is Phase 09.
+Phase 07 connects the React dashboard to the Spring Boot APIs built in Phases 04–06. Every number, row, and status shown comes from the backend; nothing is invented when a request fails. Job submission (the Detection Workspace) was added in Phase 08 ([video-detection-workspace.md](video-detection-workspace.md)) and video preview and downloads in Phase 09 ([video-preview-download.md](video-preview-download.md)).
 
 ## 1. Architecture
 
@@ -9,14 +9,15 @@ The stack is React 19, TypeScript in strict mode, Vite 8, React Router 7, Axios,
 ```text
 src/
   api/        client.ts (Axios + ApiError), guards.ts (runtime shape checks),
-              models.ts, detections.ts, system.ts
+              models.ts, detections.ts, system.ts, artifacts.ts (Phase 09 media URLs and result.json)
   types/      api.ts, models.ts, detections.ts   (match the backend DTOs exactly)
   hooks/      useApiResource.ts, useDetectionProgress.ts, useBackendStatus.ts
   lib/        format.ts (dates, durations, sizes), jobStatus.ts (labels, tones, order),
               youtube.ts, modelSelection.ts, cocoClasses.ts, detectionForm.ts (Phase 08)
   components/ JobStatusBadge, ProgressBar, StatCard, StateViews (loading/empty/error),
               PaginationControls, DetectionTable, PageHeader, Sidebar, Icon, StatusBadge,
-              workspace/ (Phase 08 Detection Workspace form components)
+              workspace/ (Phase 08 Detection Workspace form components),
+              results/ (Phase 09 DetectionVideoPlayer, ResultJsonViewer)
   pages/      Dashboard, Detection, Models, History, DetectionDetails
   test/       fixtures.ts (data + FakeEventSource), render.tsx (router helpers)
 ```
@@ -98,7 +99,7 @@ When the job is `COMPLETED`, `GET /detections/{id}/result` supplies:
 - total **detection events**
 - a bar per class, labelled "*Class* detection events" and sorted by count, supporting any class name
 
-The page states that counts are bounding-box detections summed across frames, not unique objects. Video preview and download are described as a future phase, with no links or buttons.
+The page states that counts are bounding-box detections summed across frames, not unique objects. Since Phase 09, completed jobs also show the annotated-video player, *Download detected video* / *Download JSON* links, and a raw `result.json` viewer (see [video-preview-download.md](video-preview-download.md)).
 
 ## 8. Live progress (SSE)
 
@@ -173,7 +174,7 @@ Executed results are recorded in [phase-07-validation.md](phase-07-validation.md
 - **Count timing.** Dashboard counts are separate queries, so a transition between them can momentarily skew "In progress".
 - **Class names.** Class IDs on the job page are raw numbers, because the API does not expose model class names.
 - **No authentication.** Everything is development-only, like the API (see [detection-rest-api.md](detection-rest-api.md)).
-- **Not yet built.** No cancellation, video preview, or download. (Job submission was added in Phase 08.)
+- **Not yet built.** No cancellation. (Job submission was added in Phase 08; video preview and downloads in Phase 09.)
 
 ## 16. Detection Workspace (Phase 08)
 
