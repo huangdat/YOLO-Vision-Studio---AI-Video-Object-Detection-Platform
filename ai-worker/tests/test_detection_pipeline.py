@@ -4,10 +4,13 @@ from pathlib import Path
 import pytest
 
 from app.config.settings import Settings
-from app.core.exceptions import InferenceError, InvalidVideoSourceError, VideoDownloadError, VideoEncodingError
+from app.core.exceptions import (
+    InferenceError, InvalidVideoSourceError, VideoDownloadError, VideoEncodingError, VideoNormalizationError,
+)
 from app.schemas.detection import DetectionRequest, DetectionStatistics, SourceType
 from app.schemas.progress import ProgressEvent, ProgressReporter, ProgressStage
 from app.schemas.video import ProcessingResult, VideoMetadata
+from app.services.video_input import PreparedVideo, VideoStreamInfo
 from app.workers.detection_pipeline import DetectionPipeline
 
 
@@ -66,13 +69,36 @@ class FakeDownloader:
         return video
 
 
+class FakePreparer:
+    """Pass-through by default; with normalize=True, writes a converted copy into the work directory."""
+
+    def __init__(self, normalize=False, error=None):
+        self.normalize, self.error = normalize, error
+        self.calls = []
+
+    def prepare(self, source, work_dir):
+        self.calls.append((source, work_dir))
+        info = VideoStreamInfo(codec="av1" if self.normalize else "h264", container="matroska,webm",
+                               width=320, height=240, pixel_format="yuv420p", duration_seconds=1.0)
+        if self.normalize:
+            converted = work_dir / "normalized-test.mp4"
+            converted.write_bytes(b"normalized h264")
+            if self.error:
+                raise self.error
+            return PreparedVideo(path=converted, source=info, normalized=True)
+        if self.error:
+            raise self.error
+        return PreparedVideo(path=source, source=info, normalized=False)
+
+
 @pytest.fixture
 def setup_pipeline(tmp_path):
     settings = Settings(temp_dir=tmp_path / "work", output_dir=tmp_path / "outputs", local_input_dir=tmp_path)
     source = tmp_path / "source.avi"
     source.write_bytes(b"original input")
     processor = FakeProcessor()
-    pipeline = DetectionPipeline(settings, processor=processor, downloader=FakeDownloader(), encoder=FakeEncoder())
+    pipeline = DetectionPipeline(settings, processor=processor, downloader=FakeDownloader(), encoder=FakeEncoder(),
+                                 input_preparer=FakePreparer())
     return settings, source, processor, pipeline
 
 
@@ -239,3 +265,46 @@ def test_result_metadata_reports_the_actually_loaded_model_not_the_request(setup
     result = pipeline.process_video(local(source, model_key="yolov8n"))
 
     assert result.model_key == "yolo11n" and result.weights_filename == "yolo11n.pt"
+
+
+def youtube():
+    return DetectionRequest(source="https://youtu.be/abcdefghijk", source_type=SourceType.YOUTUBE_URL)
+
+
+def test_youtube_av1_download_is_normalized_before_processing_and_cleaned(setup_pipeline):
+    settings, source, processor, pipeline = setup_pipeline
+    pipeline.input_preparer = preparer = FakePreparer(normalize=True)
+    seen = []
+    original = processor.process
+
+    def record(video_path, output_path, request, on_progress=None):
+        seen.append((video_path.name, video_path.read_bytes()))
+        return original(video_path, output_path, request, on_progress)
+    processor.process = record
+    result = pipeline.process_video(youtube())
+    downloaded, work_dir = preparer.calls[0]
+    assert downloaded.name == "downloaded.webm" and downloaded.parent == work_dir
+    assert seen == [("normalized-test.mp4", b"normalized h264")]
+    assert result.output.video_path.read_bytes() == b"encoded video"
+    assert list(settings.temp_dir.iterdir()) == []
+
+
+def test_local_sources_are_prepared_without_modifying_the_original(setup_pipeline):
+    settings, source, processor, pipeline = setup_pipeline
+    pipeline.input_preparer = preparer = FakePreparer(normalize=True)
+    pipeline.process_video(local(source))
+    assert preparer.calls[0][0] == source
+    assert source.read_bytes() == b"original input"
+    assert list(settings.temp_dir.iterdir()) == []
+
+
+def test_normalization_failure_fails_the_job_without_publishing(setup_pipeline):
+    settings, source, processor, pipeline = setup_pipeline
+    pipeline.input_preparer = FakePreparer(normalize=True, error=VideoNormalizationError("conversion failed"))
+    events = []
+    with pytest.raises(VideoNormalizationError):
+        pipeline.process_video(youtube(), events.append)
+    assert processor.requests == []
+    assert not list(settings.temp_dir.iterdir())
+    assert not list(settings.output_dir.iterdir())
+    assert events[-1].stage == ProgressStage.FAILED

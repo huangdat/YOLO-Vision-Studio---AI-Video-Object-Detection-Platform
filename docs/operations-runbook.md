@@ -139,6 +139,13 @@ Observed during Phase 10 validation on a 13.9 GB Windows host running CPU infere
 - **Causes:** the video is private, age- or region-restricted, removed, longer than `AI_MAX_VIDEO_DURATION_SECONDS`, or larger than `AI_MAX_VIDEO_SIZE_MB`; or a network problem.
 - **Recover:** use an authorized, publicly accessible single video within the limits. Raise limits only deliberately.
 
+## Video decoding failure
+
+- **Symptoms:** a job fails after the download with `INVALID_VIDEO_CONTENT`, `VIDEO_STREAM_MISSING`, `VIDEO_NORMALIZATION_FAILED`, or `UNSUPPORTED_VIDEO_CODEC`. Consumer logs may show OpenCV `[av1]` warnings followed by `normalizing to H.264`.
+- **Diagnose:** the consumer log line `Video input is directly decodable (codec …)` or `OpenCV cannot decode codec …` shows the probed codec. Check for software decoders with `docker compose exec ai-detection-consumer ffmpeg -hide_banner -decoders | grep -E "dav1d|libaom|vp9|h264"`.
+- **Causes:** a corrupt or audio-only source, or a custom image whose system FFmpeg lacks `libdav1d`/`libx264`. AV1 itself is supported: OpenCV cannot decode it, so the worker normalizes it with the system FFmpeg.
+- **Recover:** use the default worker image (Debian FFmpeg includes `libdav1d` and `libx264`). For `VIDEO_LIMIT_EXCEEDED` during normalization, raise `AI_MAX_INTERMEDIATE_SIZE_MB` or `AI_PROCESSING_TIMEOUT_SECONDS` deliberately. See [ai-detection-engine.md](ai-detection-engine.md#codec-compatibility-and-normalization).
+
 ## MinIO object missing
 
 - **Symptoms:** the job page shows "The detected video is missing". The API returns `404 ARTIFACT_NOT_FOUND`.

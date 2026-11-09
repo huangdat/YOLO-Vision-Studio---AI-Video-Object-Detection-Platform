@@ -135,9 +135,8 @@ class YouTubeDownloader:
         def final_hook(filename: str) -> None:
             final_paths.append(Path(filename))
 
-        height = self.settings.max_download_height
         options: dict[str, Any] = {
-            "format": f"bv[height<={height}]+ba/b[height<={height}]",
+            **self.format_options(self.settings.max_download_height),
             "outtmpl": str(directory / "source.%(ext)s"),
             "merge_output_format": "mkv",
             "noplaylist": True,
@@ -193,6 +192,20 @@ class YouTubeDownloader:
                 "YouTube download failed. The video may be unavailable or restricted; "
                 "check FFmpeg and the configured JavaScript runtime."
             ) from error
+
+    @staticmethod
+    def format_options(height: int) -> dict[str, Any]:
+        """yt-dlp format selection: a real video stream, H.264 preferred at the best allowed height.
+
+        By default yt-dlp ranks AV1 > VP9 > H.264 at equal resolution. OpenCV's bundled FFmpeg
+        has no software AV1 decoder, so H.264 is preferred; resolution still ranks first, so
+        quality is never lowered just to avoid AV1. Other codecs are normalized after download.
+        """
+        return {
+            # [vcodec!=none] keeps audio-only formats from ever being selected as the input.
+            "format": f"bv[height<={height}][vcodec!=none]+ba/b[height<={height}][vcodec!=none]",
+            "format_sort": [f"res:{height}", "vcodec:h264"],
+        }
 
     def _validate_metadata(self, info: Any, limit_bytes: int) -> None:
         if not isinstance(info, dict):

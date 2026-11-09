@@ -66,13 +66,43 @@ Video processing remains streaming: it does not load the entire video or retain 
 
 The downloader accepts supported single-video YouTube URLs only. It validates the URL scheme and exact supported hosts, rejects playlist/live requests and malformed video identifiers, canonicalizes accepted video references, checks metadata duration and known size, and enforces actual download limits. It uses yt-dlp's Python API with argument data rather than shell commands.
 
-The preferred format is `bv[height<=720]+ba/b[height<=720]`, with the height configurable. Downloads use unique directories and are not assumed to be MP4: MP4, WebM, and MKV finalized files are supported. The returned path is validated from finalized downloader information rather than selecting an arbitrary directory entry. Incomplete downloads are removed on failure.
+The format selector is `bv[height<=720][vcodec!=none]+ba/b[height<=720][vcodec!=none]`, with the height configurable, so audio-only formats are never accepted as the video input. The sort order is `res:720,vcodec:h264`. Resolution ranks first, and at equal resolution H.264 is preferred over AV1 and VP9. yt-dlp's default ranking prefers AV1, which OpenCV cannot decode on CPU (see [Codec compatibility](#codec-compatibility-and-normalization)). Quality is never lowered just to avoid AV1: if only AV1 exists at the best allowed height, it is downloaded and normalized. Downloads use unique directories and are not assumed to be MP4: MP4, WebM, and MKV finalized files are supported. The returned path is validated from finalized downloader information rather than selecting an arbitrary directory entry. Incomplete downloads are removed on failure.
 
 Current yt-dlp YouTube operations may require a supported JavaScript runtime. Deno is the default configured runtime; install it on `PATH` or set `AI_YOUTUBE_JS_RUNTIME_PATH` to its executable. The AI requirements include yt-dlp's default extras and matching EJS challenge-solver support. No notebook-specific Deno path is used, and no cookie extraction, authentication bypass, DRM bypass, or private-content workflow is implemented. Restricted or unavailable content returns an error. Use only content you are authorized to download and process.
 
 The default worker image includes yt-dlp/EJS but does not bundle Deno. Add a supported Linux runtime to a derived image or mount its executable and configure its path before using YouTube operations that require it. Local-file inference does not need a JavaScript runtime.
 
 Refer to the [official yt-dlp JavaScript-runtime guidance](https://github.com/yt-dlp/yt-dlp/wiki/EJS) when installing or updating the runtime. Live YouTube verification must be reported separately from mocked downloader tests.
+
+## Codec compatibility and normalization
+
+Inference reads frames through OpenCV, and the `opencv-python-headless` wheel ships its own FFmpeg build. That build contains FFmpeg's native `av1` decoder, which only works with hardware acceleration, and no software AV1 decoder (dav1d or libaom). On a CPU host OpenCV opens an AV1 file, but every `read()` fails with `Your platform doesn't support hardware accelerated AV1 decoding` / `Failed to get pixel format`. That is what made YouTube jobs fail with "The video contains no readable frames". The system FFmpeg in the worker image (Debian 12, FFmpeg 5.1) does decode AV1 in software through `libdav1d`. VP9 and H.264 decode in both builds.
+
+Before inference, `VideoInputPreparer` (`app/services/video_input.py`) checks every source, downloaded or local, in these steps:
+
+1. **Probe.** FFprobe identifies the container and the first real video stream (cover art is ignored), its codec, dimensions, pixel format, and duration. It enforces the pixel and duration limits.
+2. **Use the source as-is when possible.** If OpenCV decodes a real frame, the source is used unchanged and nothing is transcoded.
+3. **Normalize otherwise.** The system FFmpeg converts the video, in software (`-hwaccel none`, `-xerror`, no shell), to video-only H.264/yuv420p MP4 (`libx264 -preset veryfast -crf 18`, even-dimension padding).
+   - The output goes into the job's temporary working directory, which is removed with the job.
+   - It is bounded by `AI_PROCESSING_TIMEOUT_SECONDS`, by `AI_MAX_INTERMEDIATE_SIZE_MB` (`-fs`), and by the duration limit plus one second, so an over-long video still fails instead of being silently cut.
+   - The normalized file must be readable by OpenCV.
+   - Only the input is normalized; the annotated output is encoded once, as before.
+
+| Error code | Meaning |
+| --- | --- |
+| `VIDEO_DOWNLOAD_FAILED` | yt-dlp could not download the video (retryable) |
+| `INVALID_VIDEO_CONTENT` | FFprobe could not read the file (corrupt, truncated, or not media) |
+| `VIDEO_STREAM_MISSING` | No video stream (for example, audio only) |
+| `VIDEO_NORMALIZATION_FAILED` | FFmpeg could not convert the video (fixed message; FFmpeg output is never exposed) |
+| `UNSUPPORTED_VIDEO_CODEC` | Not even the normalized video yields readable frames |
+| `VIDEO_LIMIT_EXCEEDED` | Duration, pixel, size, or time limits, including normalization |
+
+`AI_MAX_VIDEO_SIZE_MB` limits only the source or download. The worker's own temporary files have a separate budget, `AI_MAX_INTERMEDIATE_SIZE_MB` (default 4096). The annotated MJPG intermediate takes about 180 KB per 720p frame, so under the old shared 200 MB limit any 720p video longer than about 38 s failed.
+
+Limitations:
+- Normalization costs CPU time. A 20 s 720p AV1 clip took a few seconds on four threads.
+- It needs `libx264` and a software decoder for the source codec in the system FFmpeg.
+- 10-bit and HDR sources are converted to 8-bit yuv420p without tone mapping.
 
 ## FFmpeg export
 
@@ -95,6 +125,7 @@ All engine settings use environment variables. Base HTTP settings `AI_WORKER_HOS
 | `AI_DEFAULT_IMAGE_SIZE` | `960` | Positive inference image size |
 | `AI_MAX_VIDEO_DURATION_SECONDS` | `300` | Maximum source duration |
 | `AI_MAX_VIDEO_SIZE_MB` | `200` | Maximum source/download size |
+| `AI_MAX_INTERMEDIATE_SIZE_MB` | `4096` | Disk budget for temporary normalized input and the annotated MJPG intermediate |
 | `AI_MAX_DOWNLOAD_HEIGHT` | `720` | Preferred YouTube resolution ceiling |
 | `AI_FFMPEG_PATH` | `ffmpeg` | FFmpeg executable |
 | `AI_FFPROBE_PATH` | `ffprobe` | FFprobe executable |

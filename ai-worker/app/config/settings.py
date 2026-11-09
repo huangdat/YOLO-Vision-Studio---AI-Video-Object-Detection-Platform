@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     max_video_size_mb: float = Field(
         default=200, gt=0, allow_inf_nan=False, validation_alias="AI_MAX_VIDEO_SIZE_MB"
     )
+    # Disk budget for the worker's own temporary files (normalized input, annotated MJPG
+    # intermediate). MJPG is large: about 180 KB per 720p frame, about 1.6 GB for 300 s at 30 fps.
+    max_intermediate_size_mb: float = Field(
+        default=4096, gt=0, allow_inf_nan=False, validation_alias="AI_MAX_INTERMEDIATE_SIZE_MB"
+    )
     max_download_height: int = Field(default=720, gt=0, validation_alias="AI_MAX_DOWNLOAD_HEIGHT")
     ffmpeg_path: str = Field(default="ffmpeg", min_length=1, validation_alias="AI_FFMPEG_PATH")
     ffprobe_path: str = Field(default="ffprobe", min_length=1, validation_alias="AI_FFPROBE_PATH")

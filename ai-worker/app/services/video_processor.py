@@ -114,6 +114,9 @@ class VideoProcessor:
         # MJPG and yuv420p output both need even dimensions; padding preserves edge pixels.
         writer_width = metadata.width + metadata.width % 2
         writer_height = metadata.height + metadata.height % 2
+        # The annotated MJPG intermediate is far larger than a compressed source, so it has
+        # its own disk budget; AI_MAX_VIDEO_SIZE_MB limits only the source/download.
+        intermediate_limit = self.settings.max_intermediate_size_mb * 1024 * 1024
         writer: Any = None
         frames: Any = None
         processed = 0
@@ -151,7 +154,7 @@ class VideoProcessor:
                 if detected.inference_time_ms is not None:
                     measured_time += detected.inference_time_ms
                     measured_frames += 1
-                if output_path.exists() and output_path.stat().st_size > self.settings.max_video_size_mb * 1024 * 1024:
+                if output_path.exists() and output_path.stat().st_size > intermediate_limit:
                     raise VideoLimitExceededError("The intermediate video exceeds the configured size limit.")
                 if metadata.total_frames:
                     fraction = min(processed / metadata.total_frames, 1.0)
@@ -171,7 +174,7 @@ class VideoProcessor:
             writer = None
             if not output_path.is_file() or output_path.stat().st_size <= 0:
                 raise VideoProcessingError("The video writer produced no valid output file.")
-            if output_path.stat().st_size > self.settings.max_video_size_mb * 1024 * 1024:
+            if output_path.stat().st_size > intermediate_limit:
                 raise VideoLimitExceededError("The intermediate video exceeds the configured size limit.")
             check = cv2.VideoCapture(str(output_path))
             try:

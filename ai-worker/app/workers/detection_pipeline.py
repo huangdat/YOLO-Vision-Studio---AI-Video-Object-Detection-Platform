@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.services.video_encoder import VideoEncoder
+    from app.services.video_input import VideoInputPreparer
     from app.services.video_processor import VideoProcessor
     from app.services.youtube_downloader import YouTubeDownloader
 
@@ -33,6 +34,7 @@ class DetectionPipeline:
         processor: VideoProcessor | None = None,
         downloader: YouTubeDownloader | None = None,
         encoder: VideoEncoder | None = None,
+        input_preparer: VideoInputPreparer | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         # Construction is inexpensive. Optional AI imports happen only during execution.
@@ -48,9 +50,14 @@ class DetectionPipeline:
             from app.services.video_encoder import VideoEncoder
 
             encoder = VideoEncoder(self.settings)
+        if input_preparer is None:
+            from app.services.video_input import VideoInputPreparer
+
+            input_preparer = VideoInputPreparer(self.settings)
         self.processor = processor
         self.downloader = downloader
         self.encoder = encoder
+        self.input_preparer = input_preparer
 
     def process_video(
         self, request: DetectionRequest, on_progress: ProgressCallback | None = None
@@ -92,8 +99,11 @@ class DetectionPipeline:
                     reporter.emit(ProgressEvent(
                         stage=ProgressStage.DETECTING, progress=15, message="Inspecting video and preparing detection"
                     ))
+                    # Probe the codec and, only when OpenCV cannot decode it (for example AV1),
+                    # convert it to H.264 inside the temporary working directory.
+                    prepared = self.input_preparer.prepare(source_path, work_dir)
                     processed = self.processor.process(
-                        source_path, work_dir / "annotated.avi", request, on_progress=reporter.emit
+                        prepared.path, work_dir / "annotated.avi", request, on_progress=reporter.emit
                     )
                     if processed.statistics.total_frames_processed == 0:
                         raise VideoProcessingError("No video frames were processed")

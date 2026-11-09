@@ -85,6 +85,7 @@ Other settings to review:
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Only needed for cross-origin API clients; the bundled UI proxies `/api` same-origin |
 | `AI_DEVICE` | `auto` | `cpu`, `cuda`, or `auto` |
 | `AI_MAX_VIDEO_DURATION_SECONDS` / `AI_MAX_VIDEO_SIZE_MB` / `AI_MAX_DOWNLOAD_HEIGHT` | 300 / 200 / 720 | Input limits enforced by the worker |
+| `AI_MAX_INTERMEDIATE_SIZE_MB` | 4096 | Disk budget for the worker's temporary normalized input and annotated intermediate |
 | `AI_PROCESSING_TIMEOUT_SECONDS` | 1800 | Upper bound for one job |
 | `WORKER_CONCURRENCY` / `WORKER_PREFETCH_COUNT` | 1 / 1 | Keep these conservative on CPU |
 | `WORKER_ALLOW_MODEL_DOWNLOAD` | `false` | Jobs never download weights; prepare models explicitly (§ 12) |

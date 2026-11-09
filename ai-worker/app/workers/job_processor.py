@@ -27,7 +27,8 @@ from pydantic import ValidationError
 from app.config.settings import Settings
 from app.core.exceptions import (
     ArtifactStorageError, DetectionEngineError, InferenceError, InvalidVideoSourceError, ModelLoadingError,
-    VideoDownloadError, VideoEncodingError, VideoLimitExceededError, VideoProcessingError,
+    UnsupportedVideoCodecError, VideoDownloadError, VideoEncodingError, VideoLimitExceededError,
+    VideoNormalizationError, VideoProbeError, VideoProcessingError, VideoStreamMissingError,
 )
 from app.schemas.detection import DetectionRequest, SourceType
 from app.schemas.messaging import DetectionCommand, DetectionEvent, EventError, EventResult, WorkerJobStatus
@@ -103,6 +104,16 @@ def classify(error: BaseException) -> FailureInfo:
     if isinstance(error, VideoEncodingError):
         # FFmpeg diagnostics can include local paths; report a fixed message.
         return FailureInfo("VIDEO_ENCODING_FAILED", "The annotated video could not be encoded.", False)
+    if isinstance(error, VideoStreamMissingError):
+        return FailureInfo("VIDEO_STREAM_MISSING", sanitize_message(str(error)), False)
+    if isinstance(error, VideoProbeError):
+        return FailureInfo("INVALID_VIDEO_CONTENT", sanitize_message(str(error)), False)
+    if isinstance(error, VideoNormalizationError):
+        # FFmpeg stderr is never forwarded; the fixed message cannot leak paths or URLs.
+        return FailureInfo("VIDEO_NORMALIZATION_FAILED", "The video could not be converted into a decodable format.",
+                           False)
+    if isinstance(error, UnsupportedVideoCodecError):
+        return FailureInfo("UNSUPPORTED_VIDEO_CODEC", sanitize_message(str(error)), False)
     if isinstance(error, VideoProcessingError):
         return FailureInfo("VIDEO_PROCESSING_FAILED", sanitize_message(str(error)), False)
     if isinstance(error, DetectionEngineError):

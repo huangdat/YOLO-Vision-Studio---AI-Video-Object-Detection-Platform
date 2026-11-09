@@ -285,3 +285,26 @@ def test_ffmpeg_preflight_uses_an_argument_list_and_rejects_decode_errors(enviro
     assert str(context.source) in arguments[0]
     assert options.get("shell", False) is False
     assert options["timeout"] == context.processor.settings.processing_timeout_seconds
+
+
+def test_intermediate_larger_than_the_source_limit_uses_its_own_disk_budget(environment) -> None:
+    # Regression: a 137 s 720p YouTube video failed because the MJPG intermediate (~177 KB/frame)
+    # was checked against the 200 MB source limit instead of a dedicated intermediate budget.
+    context = environment
+    context.source.write_bytes(b"small")
+    context.processor.settings.max_video_size_mb = 15 / (1024 * 1024)
+
+    result = context.processor.process(context.source, context.output, context.request)
+
+    assert result.path.stat().st_size > 15
+    assert result.statistics.total_frames_processed == 3
+
+
+def test_intermediate_exceeding_its_disk_budget_fails_and_is_removed(environment) -> None:
+    context = environment
+    context.processor.settings.max_intermediate_size_mb = 15 / (1024 * 1024)
+
+    with pytest.raises(VideoLimitExceededError, match="intermediate"):
+        context.processor.process(context.source, context.output, context.request)
+
+    assert not context.output.exists()

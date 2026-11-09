@@ -94,7 +94,9 @@ def test_download_returns_final_mkv_path_after_postprocessing(
     assert result.is_relative_to(tmp_path)
     assert result.stat().st_size == provider.final_size
     assert provider.calls == [(URL, False), (URL, True)]
-    assert provider.options["format"] == "bv[height<=720]+ba/b[height<=720]"
+    assert provider.options["format"] == "bv[height<=720][vcodec!=none]+ba/b[height<=720][vcodec!=none]"
+    # H.264 is preferred at the best allowed resolution: OpenCV cannot decode AV1 on CPU.
+    assert provider.options["format_sort"] == ["res:720", "vcodec:h264"]
     assert provider.options["noplaylist"] is True
     assert provider.options["geo_bypass"] is False
     assert provider.options["overwrites"] is False
@@ -239,3 +241,48 @@ def test_javascript_runtime_configuration_is_passed_without_shell_commands(
 
     assert provider.options["js_runtimes"] == {"deno": {"path": "/tools/deno"}}
     assert "exec_cmd" not in provider.options
+
+
+def _select(formats: list[dict[str, Any]], height: int = 720) -> dict[str, Any]:
+    """Run yt-dlp's real format selection offline with the downloader's options."""
+    yt_dlp = pytest.importorskip("yt_dlp")
+    info = {"id": "abcdefghijk", "title": "t", "formats": formats, "extractor": "youtube",
+            "extractor_key": "Youtube", "webpage_url": "https://www.youtube.com/watch?v=abcdefghijk",
+            "duration": 10}
+    options = {**YouTubeDownloader.format_options(height), "quiet": True, "simulate": True}
+    with yt_dlp.YoutubeDL(options) as client:
+        return client.process_ie_result(info, download=False)
+
+
+def _fmt(format_id: str, vcodec: str, acodec: str, height: int | None, ext: str, tbr: int = 1000) -> dict[str, Any]:
+    entry: dict[str, Any] = {"format_id": format_id, "vcodec": vcodec, "acodec": acodec, "ext": ext,
+                             "url": f"https://example.invalid/{format_id}", "protocol": "https", "tbr": tbr}
+    if height:
+        entry.update(height=height, width=height * 16 // 9, fps=30)
+    return entry
+
+
+_AUDIO = [_fmt("140", "none", "mp4a.40.2", None, "m4a", tbr=128), _fmt("251", "none", "opus", None, "webm", tbr=140)]
+
+
+def test_format_selection_prefers_h264_over_av1_and_vp9_at_the_same_resolution() -> None:
+    selected = _select([*_AUDIO,
+                        _fmt("399", "av01.0.05M.08", "none", 720, "mp4", tbr=900),
+                        _fmt("247", "vp9", "none", 720, "webm", tbr=1100),
+                        _fmt("136", "avc1.4d401f", "none", 720, "mp4", tbr=1500),
+                        _fmt("137", "avc1.640028", "none", 1080, "mp4", tbr=3000),
+                        _fmt("160", "avc1.4d400c", "none", 144, "mp4", tbr=100)])
+    assert selected["format_id"].split("+")[0] == "136"
+    assert selected["height"] == 720 and selected["vcodec"].startswith("avc1")
+
+
+def test_format_selection_keeps_resolution_instead_of_downgrading_to_h264() -> None:
+    selected = _select([*_AUDIO, _fmt("399", "av01.0.05M.08", "none", 720, "mp4"),
+                        _fmt("135", "avc1.4d401e", "none", 480, "mp4")])
+    # AV1 at 720p is kept; the worker normalizes it after download instead of losing quality.
+    assert selected["format_id"].split("+")[0] == "399"
+
+
+def test_format_selection_never_accepts_audio_only_formats() -> None:
+    with pytest.raises(Exception, match="not available"):
+        _select(list(_AUDIO))
