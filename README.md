@@ -49,7 +49,9 @@ The browser never receives storage URLs or credentials, and object keys come onl
 ├── ai-worker/         FastAPI service, configuration, schemas, tests
 ├── infrastructure/    Supporting container configuration and notes
 ├── docs/              Architecture, development guide, roadmap
-├── compose.yaml       Six-service local development stack
+├── compose.yaml       Seven-service local development stack
+├── compose.production.yaml  Hardened self-hosted override (static frontend, only UI port)
+├── .github/workflows/ CI: frontend, backend, Python, integration tests
 ├── .env.example       Configuration template without credentials
 ├── .gitignore         Secrets, IDE files, build outputs, videos, weights
 ├── AGENTS.md          Persistent architecture and development rules
@@ -113,16 +115,27 @@ docker compose logs --tail 100 backend ai-worker
 docker compose down
 ```
 
-`docker compose down` preserves named volumes. Avoid volume deletion when retaining local data.
+`docker compose down` preserves named volumes. **`docker compose down -v` deletes all jobs, videos, and prepared models**; avoid it when retaining local data.
+
+### Self-hosted (hardened) layout
+
+```powershell
+docker compose -f compose.yaml -f compose.production.yaml up -d --build
+```
+
+This layout serves the static production frontend through unprivileged nginx, which proxies `/api` with unbuffered SSE and video Range requests and adds CSP and other security headers. **Only the frontend port is published**, still on `127.0.0.1`, and Swagger is disabled.
+
+Models must be prepared in the worker cache and enabled by an administrator before jobs can use them. See the **[deployment guide](docs/deployment-guide.md)** for the complete setup, model preparation, backups, and shutdown, and the **[operations runbook](docs/operations-runbook.md)** for troubleshooting. There is no authentication: keep the application on localhost or a trusted network.
 
 ## Run tests
 
-Install Java 21, Node.js 22.12 or later, and Python 3.11 for source development. The Maven Wrapper downloads Maven on first use.
+Install Java 21, Node.js `^22.22.2 || ^24.15.0 || >=26`, Python 3.11, and FFmpeg for source development. The Maven Wrapper downloads Maven on first use.
 
 ```powershell
 # backend/
 .\mvnw.cmd test
-.\mvnw.cmd -Ppostgres-it verify # Isolated PostgreSQL integration tests; Docker required.
+.\mvnw.cmd -Ppostgres-it verify # PostgreSQL, RabbitMQ, and MinIO integration tests via Testcontainers; Docker required.
+                                # The MinIO IT uses the project image: run `docker compose build minio` once first.
 
 # frontend/
 npm ci
@@ -131,18 +144,28 @@ npm run build
 
 # ai-worker/
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-ai-cpu.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-ai.txt -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest
 
 # repository root, after configuring .env
 docker compose config --quiet
 ```
 
+GitHub Actions (`.github/workflows/ci.yml`) runs these suites on every push to `main` and on pull requests:
+
+- frontend tests and build
+- backend unit tests and package
+- the Python suite
+- the backend integration tests with Testcontainers
+
+It needs no secrets and downloads no videos or YOLO weights.
+
 On macOS/Linux, use `./mvnw test` and `.venv/bin/python -m pytest`. Fast backend tests use a test-only H2 database, generate its entity mapping schema, and target Flyway at V1 only. The `postgres-it` profile separately executes the real migrations and persistence checks against isolated PostgreSQL 17 through Testcontainers. H2 success does not prove PostgreSQL compatibility. See the [database testing guide](docs/database-design.md#test-strategy-and-commands) and [development instructions](docs/development.md).
 
 ## Architecture and development workflow
 
-The frontend calls Spring Boot through `/api/v1`; it never calls the Python worker directly. Spring Boot owns APIs, metadata, and future job coordination. Python owns future video processing. RabbitMQ will carry asynchronous jobs and MinIO will store video objects.
+The frontend calls Spring Boot through `/api/v1`; it never calls the Python worker directly. Spring Boot owns the APIs, metadata, job coordination (transactional outbox), SSE progress, and artifact streaming. Python owns video download, YOLO inference, and FFmpeg encoding. RabbitMQ carries job commands and worker events with at-least-once delivery, and MinIO stores the annotated videos and result files in a private bucket.
 
 - [Architecture and current API contracts](docs/architecture.md)
 - [Database schema, persistence mappings, and tests](docs/database-design.md)
@@ -162,6 +185,9 @@ The frontend calls Spring Boot through `/api/v1`; it never calls the Python work
 - [Phase 08 validation results](docs/phase-08-validation.md)
 - [Video preview, streaming, and downloads](docs/video-preview-download.md)
 - [Phase 09 validation results](docs/phase-09-validation.md)
+- [Deployment guide](docs/deployment-guide.md)
+- [Operations runbook](docs/operations-runbook.md)
+- [Phase 10 validation and release readiness](docs/phase-10-validation.md)
 - [Persistent project rules](AGENTS.md)
 
 Every implementation phase starts by inspecting the existing repository and safely synchronizing `main` with `origin/main` using fast-forward updates. Run relevant tests, review only task-related changes, create a Conventional Commit, push `origin main`, and verify the remote commit and working tree. Never overwrite unrelated changes, commit secrets, or force push.

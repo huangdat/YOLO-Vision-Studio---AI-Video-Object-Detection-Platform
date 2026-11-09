@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataAccessException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -181,8 +182,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(response.getBody());
     }
 
-    @ExceptionHandler(DataAccessException.class)
-    public ResponseEntity<ProblemDetail> handleDataAccessFailure(DataAccessException exception) {
+    /**
+     * The database is unreachable. A failure while opening the transaction surfaces as
+     * CannotCreateTransactionException, which is not a DataAccessException; both mean the
+     * same thing to a client: retry later.
+     */
+    @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})
+    public ResponseEntity<ProblemDetail> handleDataAccessFailure(RuntimeException exception) {
         LOG.error("Database access failed while serving an API request", exception);
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
                 "The data store is temporarily unavailable.", null);

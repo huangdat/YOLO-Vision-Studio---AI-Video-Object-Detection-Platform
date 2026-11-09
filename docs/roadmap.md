@@ -91,7 +91,32 @@ Completed jobs can now be watched and downloaded:
 
 The bucket stays private, and no migration was needed. See [video-preview-download.md](video-preview-download.md) and [phase-09-validation.md](phase-09-validation.md).
 
-Phase 10 covers final integration testing, security hardening, and deployment readiness.
+## Phase 10 — integration testing, security hardening, and deployment readiness
+
+The final planned phase stabilized the existing architecture without adding features:
+
+- **Deployment:** `compose.production.yaml` adds a hardened self-hosted layout. It serves a static nginx frontend with CSP and security headers and unbuffered SSE and Range proxying, publishes only the UI port on localhost, and disables Swagger.
+- **Fixes:**
+  - The Vite proxy now keeps `Host`, so UI requests are same-origin under any local hostname.
+  - The backend sends baseline security headers, shuts down gracefully, and logs its storage target.
+  - Worker error sanitization no longer leaks Windows or UNC paths.
+- **Fixes found during live validation:**
+  - nginx resolves the backend per request, so a recreated backend is found without restarting nginx.
+  - A database outage returns 503 instead of 500.
+  - The RabbitMQ health check waits for the AMQP listener.
+- **Dependencies:** advisories in Tomcat, the PostgreSQL JDBC driver, the RabbitMQ client, Netty, Jackson, Log4j API, commons-lang3, and MinIO's transitive libraries are fixed by pinning fixed patch or minor versions.
+- **CI:** a GitHub Actions workflow runs the frontend, backend, Python, and integration suites.
+- **Docs:** [deployment-guide.md](deployment-guide.md), [operations-runbook.md](operations-runbook.md), and [phase-10-validation.md](phase-10-validation.md), which records the isolated full-stack Docker validation, failure tests, remaining risks, and the release-readiness classification.
+
+**Release status (validated, see [phase-10-validation.md § 10](phase-10-validation.md#10-release-readiness)): READY FOR CONTROLLED SELF-HOSTED USE**, meaning a single trusted user or a trusted private network on a localhost or private bind, which includes local demos.
+
+The supporting evidence:
+
+- every automated suite passed (frontend 185, backend 329 + 64 integration, Python 312);
+- a real full-stack Docker E2E with YOLO11n inference, browser playback, and byte-verified downloads passed;
+- failure and recovery tests passed (worker SIGKILL, broker, storage, and database outages).
+
+**Not ready for public or multi-user deployment.** That is blocked on authentication, authorization and job ownership, rate limiting, and TLS (see the deployment guide, § 28). The new CI workflow had not yet been verified on GitHub when this was written.
 
 ## Phase 1 boundaries
 

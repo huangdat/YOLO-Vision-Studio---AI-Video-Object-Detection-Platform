@@ -70,12 +70,17 @@ class FailureInfo:
     retryable: bool
 
 
-_PATH_PATTERN = re.compile(r"([A-Za-z]:[\\/][^\s'\"]*|(?<![\w.])/(?:[\w.-]+/)+[\w.-]*|https?://\S+)")
+_PATH_PATTERN = re.compile(r"((?<![\w.])/(?:[\w.-]+/)+[\w.-]*|https?://\S+)")
+# Windows drive and UNC paths may contain spaces ("C:\Users\First Last\..."), so their end
+# cannot be found reliably: everything from such a path to the end of the message is removed.
+_WINDOWS_PATH_PATTERN = re.compile(r"(?:(?<![A-Za-z])[A-Za-z]:[\\/]|\\\\[^\s\\/]+[\\/]).*", re.DOTALL)
 
 
 def sanitize_message(message: str) -> str:
     """Remove filesystem paths and URLs from error text and bound its length."""
-    clean = _PATH_PATTERN.sub("[redacted]", " ".join(str(message).split()))
+    clean = " ".join(str(message).split())
+    clean = _WINDOWS_PATH_PATTERN.sub("[redacted]", clean)
+    clean = _PATH_PATTERN.sub("[redacted]", clean)
     return (clean or "Detection failed.")[:500]
 
 

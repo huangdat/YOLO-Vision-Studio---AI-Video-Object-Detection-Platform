@@ -1,0 +1,96 @@
+# Continuous integration. Needs no secrets, never downloads YouTube videos or YOLO weights,
+# and starts all infrastructure in disposable containers.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (tests, TypeScript, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # The build runs strict TypeScript (tsc -b) before vite build.
+      - run: npm run build
+
+  backend:
+    name: Backend (unit and H2 tests, package)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - run: ./mvnw -B verify
+
+  python:
+    name: AI worker (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: ai-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            ai-worker/requirements*.txt
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install CPU inference and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ai-cpu.txt
+          pip install -r requirements-ai.txt -r requirements-dev.txt
+      # Broker/storage integration tests skip unless IT_RABBITMQ_* and IT_MINIO_* are set.
+      - run: python -m pytest -q
+
+  integration:
+    name: Backend integration (PostgreSQL, RabbitMQ, MinIO via Testcontainers)
+    runs-on: ubuntu-latest
+    needs: backend
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build the project's pinned MinIO image used by DetectionArtifactMinioIT
+        run: docker build -t yolo-vision-studio-minio:latest ../infrastructure/minio
+      - run: ./mvnw -B -Ppostgres-it verify

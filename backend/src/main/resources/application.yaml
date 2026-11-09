@@ -1,5 +1,7 @@
 server:
   port: ${SERVER_PORT:8080}
+  # Finish in-flight requests on SIGTERM (docker compose stop) before closing.
+  shutdown: graceful
   error:
     include-message: never
     include-stacktrace: never
@@ -7,6 +9,9 @@ server:
 spring:
   application:
     name: ${APPLICATION_NAME:yolo-vision-backend}
+  lifecycle:
+    # Upper bound for the graceful phase; SSE streams are closed by their own lifecycle first.
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:20s}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:yolovision}
     username: ${DB_USERNAME:yolovision}

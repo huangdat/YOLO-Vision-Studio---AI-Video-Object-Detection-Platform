@@ -50,6 +50,8 @@ services:
     <<: *service-defaults
     build:
       context: ./frontend
+      # Vite dev server; compose.production.yaml switches to the static "production" target.
+      target: dev
     environment:
       VITE_PROXY_TARGET: http://backend:8080
     ports:
@@ -66,6 +68,8 @@ services:
 
   backend:
     <<: *service-defaults
+    # Lets Spring Boot finish in-flight requests (graceful shutdown) before SIGKILL.
+    stop_grace_period: 30s
     build:
       context: ./backend
     environment:
@@ -180,7 +184,9 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      # Healthy only once the AMQP listener accepts connections; "ping" passes slightly
+      # earlier, which let dependents log a spurious connection error on startup.
+      test: [CMD, rabbitmq-diagnostics, -q, check_port_connectivity]
       interval: 10s
       timeout: 5s
       start_period: 30s

@@ -100,8 +100,7 @@ public class DetectionArtifactController {
                 .contentLength(body.length)
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition(artifact, attachment))
-                .header("X-Content-Type-Options", "nosniff")
-                .body(body);
+                .body(body); // X-Content-Type-Options comes from SecurityHeadersFilter
     }
 
     private void stream(UUID jobId, boolean attachment, HttpServletRequest request, HttpServletResponse response)

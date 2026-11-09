@@ -55,12 +55,36 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.status").value(400));
     }
 
+    @Test
+    void anUnreachableDatabaseIsServiceUnavailableNotAnInternalError() throws Exception {
+        // Seen live in Phase 10: with PostgreSQL stopped, opening the transaction fails with
+        // CannotCreateTransactionException (not a DataAccessException).
+        for (String path : new String[] {"/test/no-transaction", "/test/data-access"}) {
+            mockMvc.perform(get(path))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                    .andExpect(jsonPath("$.detail").value("The data store is temporarily unavailable."));
+        }
+    }
+
     @RestController
     static class TestController {
 
         @GetMapping("/test/failure")
         public String fail() {
             throw new IllegalStateException("Sensitive implementation details");
+        }
+
+        @GetMapping("/test/no-transaction")
+        public String noTransaction() {
+            throw new org.springframework.transaction.CannotCreateTransactionException(
+                    "Could not open JPA EntityManager for transaction");
+        }
+
+        @GetMapping("/test/data-access")
+        public String dataAccess() {
+            throw new org.springframework.dao.DataAccessResourceFailureException("Connection refused");
         }
 
         @PostMapping("/test/validation")

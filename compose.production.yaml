@@ -1,0 +1,45 @@
+# Hardened self-hosted layout, applied on top of compose.yaml:
+#
+#   docker compose -f compose.yaml -f compose.production.yaml up -d --build
+#
+# - The frontend is the static production build behind unprivileged nginx, which proxies /api
+#   to the backend on the internal network (SSE and video Range requests unbuffered).
+# - Only the frontend publishes a host port, still bound to BIND_ADDRESS (127.0.0.1 by
+#   default). PostgreSQL, RabbitMQ, MinIO, the backend, and the worker health API are
+#   reachable only inside the Compose network; use `docker compose exec` for administration.
+# - Swagger UI and the OpenAPI document are disabled.
+#
+# There is still no authentication: keep this on localhost or a trusted network
+# (see docs/deployment-guide.md, "Security limitations").
+services:
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    image: ${COMPOSE_PROJECT_NAME:-yolo-vision-studio}-frontend-production
+    environment: !reset {}
+    ports: !override
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-5173}:8080"
+    healthcheck: !override
+      test: [CMD, wget, --quiet, --spider, "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
+  backend:
+    ports: !reset []
+    environment:
+      API_DOCS_ENABLED: "false"
+
+  ai-worker:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  rabbitmq:
+    ports: !reset []
+
+  minio:
+    ports: !reset []

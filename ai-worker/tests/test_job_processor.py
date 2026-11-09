@@ -332,6 +332,18 @@ def test_sanitize_message_removes_paths_and_urls(text):
     assert "[redacted]" in clean and "me" not in clean.split("[redacted]")[0][-3:] and "SECRET" not in clean
 
 
+@pytest.mark.parametrize(("text", "expected"), [
+    # Windows paths can contain spaces; nothing after the drive prefix may leak.
+    ("Cannot open C:\\Users\\First Last\\AppData\\Local\\Temp\\x\\source.mp4", "Cannot open [redacted]"),
+    ("C:/Users/First Last/video.mp4 is corrupt", "[redacted]"),
+    ("\\\\fileserver\\share name\\clip.mp4 missing", "[redacted]"),
+    ("Reading /data/temp/job-1/source.mp4 failed", "Reading [redacted] failed"),
+    ("Video exceeds the 300 s limit (ratio 1:2)", "Video exceeds the 300 s limit (ratio 1:2)"),
+])
+def test_sanitize_message_never_leaks_any_part_of_a_path(text, expected):
+    assert sanitize_message(text) == expected
+
+
 def test_throttle_publishes_on_stage_change_step_or_interval():
     now = [0.0]
     throttle = ProgressThrottle(min_step=5, interval_seconds=10, clock=lambda: now[0])
