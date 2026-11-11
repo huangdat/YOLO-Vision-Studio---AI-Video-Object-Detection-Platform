@@ -108,6 +108,23 @@ class Settings(BaseSettings):
                                      validation_alias="MINIO_OBJECT_PREFIX")
     minio_region: str | None = Field(default=None, validation_alias="MINIO_REGION")
 
+    # Live (webcam) inference: an internal HTTP API served by the dedicated ai-live-worker.
+    live_max_frame_bytes: int = Field(
+        default=512 * 1024, ge=1024, le=8 * 1024 * 1024, validation_alias="LIVE_MAX_FRAME_BYTES"
+    )
+    live_max_frame_pixels: int = Field(default=1280 * 720, gt=0, le=8_294_400, validation_alias="LIVE_MAX_FRAME_PIXELS")
+    live_max_frame_side: int = Field(default=1280, ge=32, le=4096, validation_alias="LIVE_MAX_FRAME_SIDE")
+    live_max_image_size: int = Field(default=640, ge=32, le=1280, validation_alias="LIVE_MAX_IMAGE_SIZE")
+    live_model_sizes: str = Field(default="n", pattern=r"^[nslmx](,[nslmx])*$", validation_alias="LIVE_MODEL_SIZES")
+    live_max_loaded_models: int = Field(default=1, ge=1, le=4, validation_alias="LIVE_MAX_LOADED_MODELS")
+    live_max_concurrent_inferences: int = Field(
+        default=1, ge=1, le=4, validation_alias="LIVE_MAX_CONCURRENT_INFERENCES"
+    )
+
+    @property
+    def live_allowed_model_sizes(self) -> frozenset[str]:
+        return frozenset(self.live_model_sizes.split(","))
+
     @property
     def effective_prefetch_count(self) -> int:
         return max(self.worker_prefetch_count or self.worker_concurrency, self.worker_concurrency)

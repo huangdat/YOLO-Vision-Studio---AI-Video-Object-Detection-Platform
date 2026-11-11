@@ -7,7 +7,7 @@ from app.config.settings import get_settings
 
 # Host configuration (for example AI_FFPROBE_PATH pointing at a real executable)
 # must not change unit-test behavior. Tests that need a setting use monkeypatch.setenv.
-_SETTINGS_PREFIXES = ("AI_", "YOLO_", "RABBITMQ_", "MINIO_", "WORKER_", "JOB_")
+_SETTINGS_PREFIXES = ("AI_", "YOLO_", "RABBITMQ_", "MINIO_", "WORKER_", "JOB_", "LIVE_")
 _SETTINGS_NAMES = {"LOG_LEVEL", "OMP_NUM_THREADS"}
 
 

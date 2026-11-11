@@ -53,9 +53,18 @@ class ModelLoader:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
+    @classmethod
+    def evict(cls, keep: set[str]) -> list[str]:
+        """Drop process-cached models whose key is not in ``keep``; returns the evicted keys."""
+        with cls._load_lock:
+            evicted = [key for key in cls._cache if key[1] not in keep]
+            for key in evicted:
+                del cls._cache[key]
+        return [key[1] for key in evicted]
+
     def load(
         self, model_key: str = DEFAULT_MODEL_KEY, device: str | None = None,
-        allow_download: bool = True,
+        allow_download: bool = True, record_verification: bool = True,
     ) -> LoadedModel:
         spec = get_model_spec(model_key)
         if spec is None:
@@ -118,7 +127,9 @@ class ModelLoader:
                     f"{filename} could not be loaded. Check the optional AI dependencies, "
                     "cached weights, network availability, and requested device."
                 ) from error
-            self._record_verification(cache_dir, spec, weights, actual_device)
+            if record_verification:
+                # Read-only consumers of a shared cache (the live worker) skip this write.
+                self._record_verification(cache_dir, spec, weights, actual_device)
             return loaded
 
     @staticmethod

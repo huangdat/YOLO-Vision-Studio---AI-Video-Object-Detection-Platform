@@ -94,6 +94,7 @@ describe("workspace", () => {
   it.each([
     ["/history", "History"],
     ["/models", "Models"],
+    ["/live", "Live Detection"],
   ])("routes %s to its implemented page without a 'Soon' marker", async (path, title) => {
     vi.mocked(getSystemInfo).mockResolvedValueOnce(info);
     render(

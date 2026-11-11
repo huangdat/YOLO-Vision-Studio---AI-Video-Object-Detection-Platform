@@ -21,6 +21,7 @@ function useDrawerLayout(): boolean {
 const navigation: { to: string; label: string; icon: IconName }[] = [
   { to: "/", label: "Dashboard", icon: "dashboard" },
   { to: "/detection", label: "Detection", icon: "scan" },
+  { to: "/live", label: "Live Detection", icon: "camera" },
   { to: "/history", label: "History", icon: "history" },
   { to: "/models", label: "Models", icon: "models" },
 ];

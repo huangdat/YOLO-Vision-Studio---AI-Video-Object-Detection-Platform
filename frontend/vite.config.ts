@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: env.VITE_PROXY_TARGET || "http://localhost:8080",
           changeOrigin: false,
+          // Live Detection WebSocket (/api/v1/live/ws) through the same proxy.
+          ws: true,
         },
       },
     },

@@ -2,12 +2,12 @@
 
 **AI-Powered Video Object Detection Platform**
 
-YOLO Vision Studio is a full-stack platform for running pretrained YOLO object detection models on videos. You paste a YouTube link, pick a YOLO model and detection settings, and the platform processes the video in the background. You can follow progress live, then watch the annotated video, review detection statistics, and download the processed MP4 and its JSON results.
+YOLO Vision Studio is a full-stack platform for running pretrained YOLO object detection models on videos. You paste a YouTube link, pick a YOLO model and detection settings, and the platform processes the video in the background. You can follow progress live, then watch the annotated video, review detection statistics, and download the processed MP4 and its JSON results. A separate Live Detection page runs a YOLO Nano model on your webcam and draws the boxes over the live preview.
 
 The system is split into independent services:
 - **React frontend:** the user interface.
 - **Spring Boot backend:** APIs, validation, job coordination, and persistence.
-- **Python AI worker:** video acquisition, YOLO inference, and encoding.
+- **Python AI worker:** video acquisition, YOLO inference, and encoding; a separate internal live worker serves webcam frames.
 - **Supporting infrastructure:** RabbitMQ for asynchronous jobs, PostgreSQL for metadata, and MinIO for video and result artifacts.
 
 ## Demo
@@ -27,6 +27,7 @@ Watch YOLO Vision Studio in action — from configuring a YOLO model and submitt
 | **Asynchronous processing** | Jobs are queued through RabbitMQ and processed by a background worker, with tracked status, bounded retries, a dead-letter queue, and recovery of stalled jobs. |
 | **Real-time progress** | Live status and progress over Server-Sent Events, with an automatic polling fallback. |
 | **Video results** | Annotated H.264 MP4 with bounding boxes and confidence labels, per-class detection statistics, an HTML5 player with seeking, and MP4 and JSON downloads. |
+| **Live webcam detection** | The browser camera is analysed with a prepared YOLO Nano model at up to 5 frames per second, through a Spring Boot WebSocket gateway. Boxes are drawn on a canvas over the preview, with measured FPS and latency. Frames are never stored. |
 | **Dashboard and history** | Job statistics, recent activity, paginated and filterable job history, and a model catalog with filters. |
 
 ## System Architecture
@@ -43,6 +44,8 @@ flowchart TB
     Worker -->|"progress · completion · failure events"| EventQ[[RabbitMQ · event queue]]
     EventQ -->|"applied by the job state machine"| API
     API -->|"reads artifacts by stored key<br/>(HTTP Range streaming)"| S3
+    UI <-->|"WebSocket /api/v1/live/ws<br/>JPEG frames · JSON detections"| API
+    API -->|"internal HTTP, one frame in flight"| Live[Python live worker<br/>YOLO Nano · internal network only]
 ```
 
 How responsibilities are divided:
@@ -50,6 +53,7 @@ How responsibilities are divided:
 - **Spring Boot** validates requests, stores job state and model metadata in PostgreSQL, publishes job commands, applies the worker's events, pushes progress to browsers over SSE, and streams artifacts from MinIO.
 - **RabbitMQ** decouples the API from long-running inference. It carries job commands to the worker and progress and result events back.
 - **The Python AI worker** downloads the video, runs YOLO inference frame by frame, encodes the annotated video, and stores the MP4 and JSON in MinIO.
+- **The live worker** answers single-frame inference requests from Spring Boot only. Live frames bypass RabbitMQ, MinIO, and the job table.
 - **PostgreSQL** holds metadata and job state. **MinIO** holds the large binary artifacts in a private bucket.
 
 ## Technology Stack
@@ -167,6 +171,13 @@ The job page opens an `EventSource` to `/api/v1/detections/{jobId}/events`.
 - **Streaming.** The video endpoint supports HTTP `Range` requests (`206 Partial Content`), so the native player can seek without downloading the whole file.
 - **Downloads.** Download endpoints serve the MP4 and `result.json` as attachments.
 
+### Live webcam detection
+- **Path.** The browser captures camera frames, encodes them as JPEG, and sends them as binary WebSocket messages to Spring Boot. Spring Boot validates each frame and forwards it to the internal live worker over HTTP, then returns the detections as JSON.
+- **Backpressure.** At most one frame is in flight per session, and the newest frame wins. Nothing is queued: the browser waits for an answer, and the gateway drops frames that arrive while busy or faster than the 5 FPS limit.
+- **Limits.** One session at a time by default, bounded frame size and dimensions, inference and idle timeouts, and origin checks on the handshake.
+- **Models.** Only enabled, prepared Nano detection models are offered. The live worker reads the shared model cache read-only, keeps one model in memory, and never downloads weights.
+- **Privacy.** Frames are processed in memory and never logged or stored. Live detections do not create detection jobs, and there is no object tracking.
+
 ### Containerization and CI
 - **Containers.** Every service runs in a container defined in `compose.yaml`, with health checks, named volumes for data and the model cache, and ports bound to `127.0.0.1`.
 - **Self-hosted layout.** `compose.production.yaml` serves the built frontend through unprivileged nginx with security headers and unbuffered SSE and Range proxying. It publishes only the UI port and disables Swagger.
@@ -191,6 +202,7 @@ All endpoints are under `/api/v1`. Errors use RFC 9457 problem details with stab
 | GET | `/api/v1/detections/{jobId}/video/download` | Download the annotated MP4 |
 | GET | `/api/v1/detections/{jobId}/result.json` | Original worker result JSON |
 | GET | `/api/v1/detections/{jobId}/result.json/download` | Download the result JSON |
+| WebSocket | `/api/v1/live/ws` | Live webcam detection (JPEG frames in, JSON detections out) |
 
 Interactive documentation is served by Swagger UI at `/api/v1/docs`, and the OpenAPI document at `/api/v1/openapi`, in the development layout. See the [detection REST API guide](docs/detection-rest-api.md) for request and response schemas and error codes.
 
@@ -234,7 +246,7 @@ docker compose exec ai-detection-consumer python -m app.cli models prepare --mod
 docker compose exec ai-detection-consumer python -m app.cli models status --model yolo11n
 ```
 
-Then enable that model in PostgreSQL as an administrator, one model at a time, as described in the [model management guide](docs/yolo-model-management.md). Enabled models become selectable on the Detection page.
+Then enable that model in PostgreSQL as an administrator, one model at a time, as described in the [model management guide](docs/yolo-model-management.md). Enabled models become selectable on the Detection page. Enabled, prepared Nano models also appear on the Live Detection page at `/live`. The camera works on `http://localhost`; other hosts need HTTPS.
 
 ### Self-hosted layout
 
@@ -276,6 +288,7 @@ CI needs no secrets, and it does not download videos or YOLO weights. Live YouTu
 | Video streaming and downloads | [docs/video-preview-download.md](docs/video-preview-download.md) |
 | Frontend, Detection workspace, UI design | [docs/frontend-dashboard.md](docs/frontend-dashboard.md) · [docs/video-detection-workspace.md](docs/video-detection-workspace.md) · [docs/ui-ux-redesign.md](docs/ui-ux-redesign.md) |
 | Deployment and operations | [docs/deployment-guide.md](docs/deployment-guide.md) · [docs/operations-runbook.md](docs/operations-runbook.md) |
+| Live webcam detection | [docs/live-detection-architecture.md](docs/live-detection-architecture.md) |
 | Development environment | [docs/development.md](docs/development.md) |
 
 Validation reports and the project roadmap are kept in [`docs/`](docs/) for reference.
@@ -286,4 +299,5 @@ Validation reports and the project roadmap are kept in [`docs/`](docs/) for refe
 - **YouTube availability varies.** Downloads depend on each video's availability and access restrictions; private, age- or region-restricted, and live videos fail.
 - **Models need preparation.** A catalog entry is usable only after its checkpoint has been prepared in the worker cache and the model has been enabled.
 - **Counts are detection events, not unique objects.** There is no object tracking, so counts are summed across frames.
+- **Live detection is a single-user preview.** It allows one session, at most 5 FPS, Nano models only, and no tracking or recording. Its rate depends on the CPU.
 - **CPU by default.** The default worker image uses CPU inference, so processing long or high-resolution videos takes time.

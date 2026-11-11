@@ -71,6 +71,19 @@ app:
     reconnect-delay: 3s
   detection-api:
     max-request-bytes: ${DETECTION_API_MAX_REQUEST_BYTES:16384}
+  live:
+    # Live (webcam) Detection gateway: WebSocket /api/v1/live/ws -> internal ai-live-worker.
+    worker-url: ${LIVE_WORKER_URL:http://localhost:8001}
+    max-sessions: ${LIVE_MAX_SESSIONS:1}
+    max-fps: ${LIVE_MAX_FPS:5}
+    max-frame-bytes: ${LIVE_MAX_FRAME_BYTES:524288}
+    image-sizes: 320,416,640
+    model-sizes: ${LIVE_MODEL_SIZES:n}
+    inference-timeout: ${LIVE_INFERENCE_TIMEOUT:5s}
+    load-timeout: ${LIVE_LOAD_TIMEOUT:60s}
+    idle-timeout: ${LIVE_IDLE_TIMEOUT:30s}
+    max-session-duration: ${LIVE_MAX_SESSION_DURATION:30m}
+    send-time-limit: 5s
   storage:
     # Private MinIO bucket written by the worker; the backend only reads completed artifacts.
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

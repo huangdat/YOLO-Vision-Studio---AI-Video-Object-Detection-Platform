@@ -22,10 +22,8 @@ class DetectedFrame:
 
 
 class DetectionService:
-    def iter_frames(
-        self, video_path: Path, loaded_model: LoadedModel, confidence: float,
-        image_size: int, classes: list[int],
-    ) -> Iterator[DetectedFrame]:
+    @staticmethod
+    def _validate(loaded_model: LoadedModel, confidence: float, image_size: int, classes: list[int]) -> None:
         if not math.isfinite(confidence) or not 0 <= confidence <= 1:
             raise InferenceError("Confidence must be between zero and one.")
         if image_size <= 0:
@@ -35,6 +33,36 @@ class DetectionService:
             for value in classes
         ):
             raise InferenceError("Selected class identifiers are not supported by this model.")
+
+    def detect_image(
+        self, image: Any, loaded_model: LoadedModel, confidence: float,
+        image_size: int, classes: list[int],
+    ) -> DetectedFrame:
+        """One decoded BGR image (live frames). Boxes are in the image's own pixel coordinates;
+        no annotated image is rendered and nothing is written to disk."""
+        self._validate(loaded_model, confidence, image_size, classes)
+        with loaded_model.lock:
+            try:
+                results = loaded_model.model.predict(
+                    source=image, conf=confidence, imgsz=image_size, classes=classes,
+                    device=loaded_model.device, save=False, verbose=False,
+                )
+                result = results[0]
+                boxes = self._boxes(result, loaded_model.names)
+            except InferenceError:
+                raise
+            except Exception as error:
+                raise InferenceError("YOLO inference failed on the submitted frame.") from error
+        speed = getattr(result, "speed", {}) or {}
+        timing = speed.get("inference")
+        timing = float(timing) if timing is not None and math.isfinite(float(timing)) and float(timing) >= 0 else None
+        return DetectedFrame(image=None, boxes=boxes, inference_time_ms=timing)
+
+    def iter_frames(
+        self, video_path: Path, loaded_model: LoadedModel, confidence: float,
+        image_size: int, classes: list[int],
+    ) -> Iterator[DetectedFrame]:
+        self._validate(loaded_model, confidence, image_size, classes)
         stream: Any = None
         with loaded_model.lock:
             try:

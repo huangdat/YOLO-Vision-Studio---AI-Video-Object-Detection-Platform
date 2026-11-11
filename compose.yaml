@@ -90,6 +90,13 @@ services:
       DETECTION_SSE_HEARTBEAT_SECONDS: ${DETECTION_SSE_HEARTBEAT_SECONDS:-15}
       DETECTION_SSE_MAX_CONNECTIONS: ${DETECTION_SSE_MAX_CONNECTIONS:-100}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
+      # Live Detection gateway -> internal ai-live-worker (optional: video jobs never use it).
+      LIVE_WORKER_URL: http://ai-live-worker:8000
+      LIVE_MAX_SESSIONS: ${LIVE_MAX_SESSIONS:-1}
+      LIVE_MAX_FPS: ${LIVE_MAX_FPS:-5}
+      LIVE_MAX_FRAME_BYTES: ${LIVE_MAX_FRAME_BYTES:-524288}
+      LIVE_INFERENCE_TIMEOUT: ${LIVE_INFERENCE_TIMEOUT:-5s}
+      LIVE_IDLE_TIMEOUT: ${LIVE_IDLE_TIMEOUT:-30s}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -153,6 +160,30 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+
+  # Real-time webcam inference (Live Detection), separate from queued video jobs. Internal only:
+  # no host port; only the backend calls it. The model cache is mounted read-only (models are
+  # prepared with ai-detection-consumer), and Ultralytics settings go to /tmp.
+  ai-live-worker:
+    <<: *service-defaults
+    build:
+      context: ./ai-worker
+    command: [python, -m, app.live_server]
+    environment:
+      AI_DEVICE: ${AI_DEVICE:-auto}
+      AI_MODEL_CACHE_DIR: /data/models
+      AI_WORKER_PORT: "8000"
+      AI_CPU_THREADS: ${LIVE_CPU_THREADS:-2}
+      OMP_NUM_THREADS: ${LIVE_CPU_THREADS:-2}
+      YOLO_CONFIG_DIR: /tmp/ultralytics
+      LIVE_MAX_FRAME_BYTES: ${LIVE_MAX_FRAME_BYTES:-524288}
+      LIVE_MODEL_SIZES: ${LIVE_MODEL_SIZES:-n}
+      LIVE_MAX_LOADED_MODELS: ${LIVE_MAX_LOADED_MODELS:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ai-model-cache:/data/models:ro
+    mem_limit: ${LIVE_WORKER_MEMORY_LIMIT:-2g}
+    cpus: ${LIVE_WORKER_CPUS:-2}
 
   postgres:
     <<: *service-defaults

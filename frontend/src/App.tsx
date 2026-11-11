@@ -8,11 +8,13 @@ import { Dashboard } from "./pages/Dashboard";
 import { Detection } from "./pages/Detection";
 import { DetectionDetails } from "./pages/DetectionDetails";
 import { History } from "./pages/History";
+import { LiveDetection } from "./pages/LiveDetection";
 import { Models } from "./pages/Models";
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/detection": "Detection",
+  "/live": "Live Detection",
   "/history": "History",
   "/models": "Models",
 };
@@ -60,6 +62,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<Dashboard status={status} refresh={refresh} />} />
             <Route path="/detection" element={<Detection />} />
+            <Route path="/live" element={<LiveDetection />} />
             <Route path="/history" element={<History />} />
             <Route path="/detections/:jobId" element={<DetectionDetails />} />
             <Route path="/models" element={<Models />} />

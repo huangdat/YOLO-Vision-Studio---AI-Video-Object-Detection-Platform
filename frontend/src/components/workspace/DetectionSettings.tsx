@@ -73,10 +73,15 @@ export function ImageSizeSelector({
   value,
   disabled,
   onChange,
+  sizes = IMAGE_SIZES,
+  defaultSize = DEFAULT_IMAGE_SIZE,
 }: {
   value: number;
   disabled?: boolean;
   onChange: (value: number) => void;
+  /** Offered sizes; video jobs and Live Detection use different ranges. */
+  sizes?: readonly number[];
+  defaultSize?: number;
 }) {
   const id = useId();
   const hintId = useId();
@@ -93,9 +98,9 @@ export function ImageSizeSelector({
         onChange={(event) => onChange(Number(event.target.value))}
         aria-describedby={hintId}
       >
-        {IMAGE_SIZES.map((size) => (
+        {sizes.map((size) => (
           <option key={size} value={size}>
-            {size} px{size === DEFAULT_IMAGE_SIZE ? " (default)" : ""}
+            {size} px{size === defaultSize ? " (default)" : ""}
           </option>
         ))}
       </select>

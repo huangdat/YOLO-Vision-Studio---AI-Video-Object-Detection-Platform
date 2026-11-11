@@ -25,7 +25,8 @@ export type IconName =
   | "chevronDown"
   | "play"
   | "link"
-  | "sliders";
+  | "sliders"
+  | "camera";
 
 const paths: Record<IconName, React.ReactNode> = {
   vision: (
@@ -99,6 +100,12 @@ const paths: Record<IconName, React.ReactNode> = {
   play: <path d="M8 5.5v13l10-6.5-10-6.5Z" />,
   link: <path d="M10 14a4 4 0 0 0 5.7 0l3.6-3.6a4 4 0 0 0-5.7-5.7L12 6.3m2 3.7a4 4 0 0 0-5.7 0l-3.6 3.6a4 4 0 0 0 5.7 5.7l1.6-1.6" />,
   sliders: <path d="M4 6h10m4 0h2M4 12h4m4 0h8M4 18h12m4 0h0M14 4v4M8 10v4m8 2v4" />,
+  camera: (
+    <>
+      <path d="M15 10.5 20 7v10l-5-3.5" />
+      <rect x="3" y="6" width="12" height="12" rx="2" />
+    </>
+  ),
   chevronRight: <path d="m9 18 6-6-6-6" />,
   activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
   download: <path d="M12 4v11m-5-5 5 5 5-5M5 20h14" />,
