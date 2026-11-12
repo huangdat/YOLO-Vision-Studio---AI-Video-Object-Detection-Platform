@@ -10,6 +10,12 @@ The system is split into independent services:
 - **Python AI worker:** video acquisition, YOLO inference, and encoding; a separate internal live worker serves webcam frames.
 - **Supporting infrastructure:** RabbitMQ for asynchronous jobs, PostgreSQL for metadata, and MinIO for video and result artifacts.
 
+## Product Showcase
+
+A 55-second silent overview: the dashboard, configuring a detection job, the service architecture, real annotated results from a completed job, and Live Detection. All product screens are real captures of the running app. In the Live Detection clip, a sample street video is used as the camera input.
+
+https://github.com/user-attachments/assets/ff193771-b136-4402-aa20-85f424f79d38
+
 ## Demo
 
 Watch YOLO Vision Studio in action — from configuring a YOLO model and submitting a video detection job to monitoring progress, viewing detection results, and downloading the processed video.
