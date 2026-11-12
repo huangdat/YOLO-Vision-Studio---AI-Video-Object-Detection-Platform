@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Detection per frame vs tracking with persistent IDs</title>
+  <defs>
+    <marker id="a-94a3b8" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker>
+    <marker id="a-8b5cf6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8b5cf6"/></marker>
+  </defs>
+  <rect width="960" height="440" rx="16" fill="#f8fafc"/>
+
+  <!-- Row 1: detection -->
+  <text x="40" y="44" font-size="20" font-weight="700" fill="#0f172a">Detection: each frame on its own</text>
+  <text x="40" y="68" font-size="14" fill="#475569">YOLO returns boxes, classes and scores per frame. Nothing links a box to the same object in the next frame.</text>
+
+  <g transform="translate(40 86)">
+    <rect width="270" height="130" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="12" y="22" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">frame t</text>
+    <rect x="30" y="50" width="70" height="44" rx="4" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="30" y="44" font-size="12" font-weight="700" fill="#2563eb">car 0.91</text>
+    <rect x="160" y="64" width="62" height="40" rx="4" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="160" y="58" font-size="12" font-weight="700" fill="#2563eb">car 0.84</text>
+  </g>
+  <g transform="translate(345 86)">
+    <rect width="270" height="130" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="12" y="22" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">frame t+1</text>
+    <rect x="70" y="52" width="70" height="44" rx="4" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="70" y="46" font-size="12" font-weight="700" fill="#2563eb">car 0.89</text>
+    <rect x="150" y="66" width="62" height="40" rx="4" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="150" y="60" font-size="12" font-weight="700" fill="#2563eb">car 0.80</text>
+  </g>
+  <g transform="translate(650 86)">
+    <rect width="270" height="130" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="12" y="22" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">frame t+2</text>
+    <rect x="110" y="54" width="70" height="44" rx="4" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="110" y="48" font-size="12" font-weight="700" fill="#2563eb">car 0.90</text>
+    <rect x="140" y="70" width="62" height="40" rx="4" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="0"/>
+    <text x="196" y="124" font-size="12" font-weight="700" fill="#2563eb">car 0.77</text>
+  </g>
+
+  <!-- Row 2: tracking -->
+  <text x="40" y="262" font-size="20" font-weight="700" fill="#0f172a">Tracking: the same object keeps its ID</text>
+  <text x="40" y="286" font-size="14" fill="#475569">A tracker matches each new box to an existing track, so objects can be followed and counted once.</text>
+
+  <g transform="translate(40 304)">
+    <rect width="270" height="120" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="12" y="22" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">frame t</text>
+    <rect x="30" y="46" width="70" height="44" rx="4" fill="none" stroke="#8b5cf6" stroke-width="2.5"/>
+    <rect x="30" y="30" width="44" height="18" rx="4" fill="#8b5cf6"/>
+    <text x="36" y="43" font-size="12" font-weight="700" fill="#ffffff">ID 1</text>
+    <rect x="160" y="60" width="62" height="40" rx="4" fill="none" stroke="#0d9488" stroke-width="2.5"/>
+    <rect x="160" y="44" width="44" height="18" rx="4" fill="#0d9488"/>
+    <text x="166" y="57" font-size="12" font-weight="700" fill="#ffffff">ID 2</text>
+  </g>
+  <g transform="translate(345 304)">
+    <rect width="270" height="120" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="12" y="22" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">frame t+1</text>
+    <rect x="70" y="48" width="70" height="44" rx="4" fill="none" stroke="#8b5cf6" stroke-width="2.5"/>
+    <rect x="70" y="32" width="44" height="18" rx="4" fill="#8b5cf6"/>
+    <text x="76" y="45" font-size="12" font-weight="700" fill="#ffffff">ID 1</text>
+    <rect x="150" y="62" width="62" height="40" rx="4" fill="none" stroke="#0d9488" stroke-width="2.5"/>
+    <rect x="168" y="102" width="44" height="18" rx="4" fill="#0d9488"/>
+    <text x="174" y="115" font-size="12" font-weight="700" fill="#ffffff">ID 2</text>
+  </g>
+  <g transform="translate(650 304)">
+    <rect width="270" height="120" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="12" y="22" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">frame t+2</text>
+    <rect x="110" y="50" width="70" height="44" rx="4" fill="none" stroke="#8b5cf6" stroke-width="2.5"/>
+    <rect x="110" y="34" width="44" height="18" rx="4" fill="#8b5cf6"/>
+    <text x="116" y="47" font-size="12" font-weight="700" fill="#ffffff">ID 1</text>
+    <rect x="140" y="66" width="62" height="40" rx="4" fill="none" stroke="#0d9488" stroke-width="2.5"/>
+    <rect x="200" y="98" width="44" height="18" rx="4" fill="#0d9488"/>
+    <text x="206" y="111" font-size="12" font-weight="700" fill="#ffffff">ID 2</text>
+  </g>
+
+  <!-- time flows left to right -->
+  <path d="M313 151 l 16 0" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" marker-end="url(#a-94a3b8)"/>
+  <path d="M618 151 l 16 0" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" marker-end="url(#a-94a3b8)"/>
+  <path d="M313 364 l 16 0" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" marker-end="url(#a-8b5cf6)"/>
+  <path d="M618 364 l 16 0" stroke="#8b5cf6" stroke-width="2.5" stroke-linecap="round" marker-end="url(#a-8b5cf6)"/>
+</svg>

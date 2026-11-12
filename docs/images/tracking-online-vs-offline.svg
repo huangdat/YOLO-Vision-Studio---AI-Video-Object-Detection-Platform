@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="340" viewBox="0 0 960 340" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Online vs offline tracking</title>
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"/></marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8b5cf6"/></marker>
+  </defs>
+  <rect width="960" height="340" rx="16" fill="#f8fafc"/>
+
+  <!-- Online -->
+  <g transform="translate(30 30)">
+    <rect width="435" height="280" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="24" y="40" font-size="20" font-weight="700" fill="#0f172a">Online</text>
+    <rect x="104" y="22" width="132" height="26" rx="13" fill="#eff6ff"/>
+    <text x="118" y="40" font-size="13" font-weight="600" fill="#1d4ed8">real-time, causal</text>
+    <text x="24" y="70" font-size="14" fill="#475569">Decides each frame as it arrives, using only the past.</text>
+
+    <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12">
+      <rect x="24" y="110" width="64" height="48" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/><text x="40" y="139" fill="#1d4ed8">t-3</text>
+      <rect x="104" y="110" width="64" height="48" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/><text x="120" y="139" fill="#1d4ed8">t-2</text>
+      <rect x="184" y="110" width="64" height="48" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/><text x="200" y="139" fill="#1d4ed8">t-1</text>
+      <rect x="264" y="104" width="72" height="60" rx="6" fill="#2563eb"/><text x="292" y="139" fill="#ffffff" font-weight="700">t</text>
+      <rect x="352" y="110" width="64" height="48" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5 4"/><text x="366" y="139" fill="#94a3b8">t+1</text>
+    </g>
+    <path d="M24 170 v8 h224 v-8" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round"/>
+    <text x="94" y="198" font-size="12" fill="#1d4ed8">past frames</text>
+    <path d="M248 178 Q 270 182 286 170" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+    <text x="352" y="186" font-size="12" fill="#94a3b8">not seen yet</text>
+
+    <text x="24" y="236" font-size="14" fill="#0f172a">✓ Live video and streams</text>
+    <text x="24" y="260" font-size="14" fill="#0f172a">✓ Low latency · fits Live Detection</text>
+  </g>
+
+  <!-- Offline -->
+  <g transform="translate(495 30)">
+    <rect width="435" height="280" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="24" y="40" font-size="20" font-weight="700" fill="#0f172a">Offline</text>
+    <rect x="108" y="22" width="166" height="26" rx="13" fill="#f5f3ff"/>
+    <text x="122" y="40" font-size="13" font-weight="600" fill="#6d28d9">whole video available</text>
+    <text x="24" y="70" font-size="14" fill="#475569">Sees past and future frames before deciding.</text>
+
+    <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12">
+      <rect x="24" y="110" width="64" height="48" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="2"/><text x="40" y="139" fill="#6d28d9">t-2</text>
+      <rect x="104" y="110" width="64" height="48" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="2"/><text x="120" y="139" fill="#6d28d9">t-1</text>
+      <rect x="184" y="104" width="72" height="60" rx="6" fill="#8b5cf6"/><text x="212" y="139" fill="#ffffff" font-weight="700">t</text>
+      <rect x="272" y="110" width="64" height="48" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="2"/><text x="288" y="139" fill="#6d28d9">t+1</text>
+      <rect x="352" y="110" width="64" height="48" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="2"/><text x="368" y="139" fill="#6d28d9">t+2</text>
+    </g>
+    <path d="M24 170 v8 h144 v-8" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linejoin="round"/>
+    <text x="82" y="198" font-size="12" fill="#6d28d9">past</text>
+    <path d="M168 178 Q 186 182 200 170" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow-violet)"/>
+    <path d="M272 170 v8 h144 v-8" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linejoin="round"/>
+    <text x="324" y="198" font-size="12" fill="#6d28d9">future</text>
+    <path d="M272 178 Q 254 182 240 170" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow-violet)"/>
+
+    <text x="24" y="236" font-size="14" fill="#0f172a">✓ Recorded video, batch jobs</text>
+    <text x="24" y="260" font-size="14" fill="#0f172a">✓ Can repair gaps and ID switches · not real-time</text>
+  </g>
+</svg>

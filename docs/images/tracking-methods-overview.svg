@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="432" viewBox="0 0 960 432" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>SORT, DeepSORT, ByteTrack and BoT-SORT at a glance</title>
+  <rect width="960" height="432" rx="16" fill="#f8fafc"/>
+  <text x="30" y="44" font-size="20" font-weight="700" fill="#0f172a">Tracking-by-detection methods</text>
+  <text x="30" y="68" font-size="14" fill="#475569">All four take per-frame detections (for example from YOLO), predict motion with a Kalman filter and match boxes to tracks.</text>
+
+  <!-- SORT -->
+  <g transform="translate(30 90)">
+    <rect width="210" height="312" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="20" y="38" font-size="20" font-weight="800" fill="#0f172a">SORT</text>
+    <text x="20" y="58" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">2016</text>
+    <text x="20" y="92" font-size="12" font-weight="700" fill="#475569">MATCHING</text>
+    <text x="20" y="112" font-size="14" fill="#0f172a">Box overlap (IoU)</text>
+    <text x="20" y="146" font-size="12" font-weight="700" fill="#475569">APPEARANCE</text>
+    <text x="20" y="166" font-size="14" fill="#0f172a">None</text>
+    <text x="20" y="200" font-size="12" font-weight="700" fill="#475569">TRADE-OFF</text>
+    <text x="20" y="220" font-size="14" fill="#0f172a">Very fast; IDs switch</text>
+    <text x="20" y="240" font-size="14" fill="#0f172a">after occlusion</text>
+    <rect x="20" y="258" width="98" height="26" rx="13" fill="#f1f5f9"/>
+    <text x="32" y="276" font-size="13" font-weight="600" fill="#475569">simple baseline</text>
+  </g>
+
+  <!-- DeepSORT -->
+  <g transform="translate(260 90)">
+    <rect width="210" height="312" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="20" y="38" font-size="20" font-weight="800" fill="#0f172a">DeepSORT</text>
+    <text x="20" y="58" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">2017</text>
+    <text x="20" y="92" font-size="12" font-weight="700" fill="#475569">MATCHING</text>
+    <text x="20" y="112" font-size="14" fill="#0f172a">Motion + appearance</text>
+    <text x="20" y="146" font-size="12" font-weight="700" fill="#475569">APPEARANCE</text>
+    <text x="20" y="166" font-size="14" fill="#0f172a">Re-ID embedding (CNN)</text>
+    <text x="20" y="200" font-size="12" font-weight="700" fill="#475569">TRADE-OFF</text>
+    <text x="20" y="220" font-size="14" fill="#0f172a">Fewer ID switches;</text>
+    <text x="20" y="240" font-size="14" fill="#0f172a">extra model per box</text>
+    <rect x="20" y="258" width="104" height="26" rx="13" fill="#f1f5f9"/>
+    <text x="32" y="276" font-size="13" font-weight="600" fill="#475569">heavier on CPU</text>
+  </g>
+
+  <!-- ByteTrack (recommended) -->
+  <g transform="translate(490 90)">
+    <rect width="210" height="312" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="3"/>
+    <text x="20" y="38" font-size="20" font-weight="800" fill="#0f172a">ByteTrack</text>
+    <text x="20" y="58" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">2021</text>
+    <text x="20" y="92" font-size="12" font-weight="700" fill="#475569">MATCHING</text>
+    <text x="20" y="112" font-size="14" fill="#0f172a">IoU, high-score boxes</text>
+    <text x="20" y="132" font-size="14" fill="#0f172a">first, then low-score</text>
+    <text x="20" y="166" font-size="12" font-weight="700" fill="#475569">APPEARANCE</text>
+    <text x="20" y="186" font-size="14" fill="#0f172a">Not required</text>
+    <text x="20" y="220" font-size="12" font-weight="700" fill="#475569">TRADE-OFF</text>
+    <text x="20" y="240" font-size="14" fill="#0f172a">Fast; recovers partly</text>
+    <text x="20" y="258" font-size="14" fill="#0f172a">occluded objects</text>
+    <rect x="20" y="266" width="140" height="26" rx="13" fill="#2563eb"/>
+    <text x="32" y="284" font-size="13" font-weight="700" fill="#ffffff">practical next step</text>
+  </g>
+
+  <!-- BoT-SORT -->
+  <g transform="translate(720 90)">
+    <rect width="210" height="312" rx="14" fill="#ffffff" stroke="#8b5cf6" stroke-width="2"/>
+    <text x="20" y="38" font-size="20" font-weight="800" fill="#0f172a">BoT-SORT</text>
+    <text x="20" y="58" font-size="12" fill="#64748b" font-family="ui-monospace, Menlo, Consolas, monospace">2022</text>
+    <text x="20" y="92" font-size="12" font-weight="700" fill="#475569">MATCHING</text>
+    <text x="20" y="112" font-size="14" fill="#0f172a">ByteTrack-style +</text>
+    <text x="20" y="132" font-size="14" fill="#0f172a">camera-motion fix</text>
+    <text x="20" y="166" font-size="12" font-weight="700" fill="#475569">APPEARANCE</text>
+    <text x="20" y="186" font-size="14" fill="#0f172a">Optional Re-ID</text>
+    <text x="20" y="220" font-size="12" font-weight="700" fill="#475569">TRADE-OFF</text>
+    <text x="20" y="240" font-size="14" fill="#0f172a">More robust; slower</text>
+    <rect x="20" y="258" width="132" height="26" rx="13" fill="#f5f3ff"/>
+    <text x="32" y="276" font-size="13" font-weight="700" fill="#6d28d9">complex scenes</text>
+  </g>
+</svg>
