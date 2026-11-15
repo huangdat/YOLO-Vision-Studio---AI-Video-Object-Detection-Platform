@@ -79,6 +79,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cpus", type=int, default=4)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--predictions-dir", type=Path)
+    parser.add_argument("--configurations", nargs="+", choices=("fp32", "ov-fp32", "int8"),
+                        default=["fp32", "ov-fp32", "int8"])
+    parser.add_argument("--int8-label", default="int8",
+                        help="Report/predictions name of the INT8 run (e.g. int8-diverse for another artifact "
+                             "selected with AI_QUANTIZED_MODEL_DIR)")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     detect_classes = list(_ints(args.detect_classes))
@@ -99,7 +104,12 @@ def main(argv: list[str] | None = None) -> int:
     for sequence in sequences:
         configurations, runs, sizes = run_configurations(
             sequence.image_dir, model=args.model, imgsz=args.imgsz, conf=args.conf, classes=detect_classes,
-            cpus=args.cpus, repeats=args.repeats, include_openvino_fp32=True)
+            cpus=args.cpus, repeats=args.repeats, include_openvino_fp32="ov-fp32" in args.configurations,
+            only=tuple(args.configurations))
+        labels = {name: (args.int8_label if name == "int8" else name) for name in configurations}
+        runs = {labels[name]: value for name, value in runs.items()}
+        sizes = {labels[name]: value for name, value in sizes.items()}
+        configurations = [labels[name] for name in configurations]
         for name in configurations:
             frames = runs[name][0]["boxes"]
             if len(frames) != sequence.length:
@@ -108,6 +118,10 @@ def main(argv: list[str] | None = None) -> int:
             rows = mot.tracker_rows(frames, args.class_map)
             if args.predictions_dir:
                 mot.write_rows(args.predictions_dir / name / "data" / f"{sequence.name}.txt", rows)
+                # Every reported box (also unconfirmed ones) for offline error analysis.
+                raw = args.predictions_dir / name / "raw" / f"{sequence.name}.json"
+                raw.parent.mkdir(parents=True, exist_ok=True)
+                raw.write_text(json.dumps(frames), encoding="utf-8")
             per_config_data.setdefault(name, {})[sequence.name] = mot.build_trackeval_data(
                 ground_truth[sequence.name], rows, sequence.length,
                 eval_classes=eval_classes, distractor_classes=distractors)
@@ -117,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     accuracy = {name: mot.evaluate_many(data) for name, data in per_config_data.items()}
     overall = "COMBINED" if len(sequences) > 1 else sequences[0].name
     deltas = {name: {key: round(accuracy[name][overall][key] - accuracy["fp32"][overall][key], 4)
-                     for key in ACCURACY_KEYS} for name in accuracy if name != "fp32"}
+                     for key in ACCURACY_KEYS} for name in accuracy if name != "fp32" and "fp32" in accuracy}
     report = {
         "input": {"sequences": [{"name": s.name, "frames": s.length, "size": [s.width, s.height]} for s in sequences],
                   "model": args.model, "imgsz": args.imgsz, "conf": args.conf, "detectClasses": detect_classes,

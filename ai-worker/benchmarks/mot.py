@@ -154,32 +154,45 @@ def iou_xywh(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.where(union > 0, intersection / np.where(union > 0, union, 1), 0.0)
 
 
+def preprocess_frame(frame_gt: np.ndarray, frame_tr: np.ndarray, *, eval_classes: tuple[int, ...],
+                     distractor_classes: tuple[int, ...]) -> tuple[np.ndarray, np.ndarray, int]:
+    """MOTChallenge preprocessing of one frame: (scored GT, kept tracker rows, removed distractor matches).
+
+    Like TrackEval's MotChallenge2DBox: tracker rows of other classes are dropped; tracker rows matched
+    (Hungarian, IoU >= 0.5) to a distractor GT box are removed, matching against every GT box of the
+    frame including conf=0 ones; only GT with conf != 0 and an evaluated class is scored.
+    """
+    from scipy.optimize import linear_sum_assignment
+
+    frame_tr = frame_tr[np.isin(frame_tr[:, 7], eval_classes)] if len(frame_tr) else frame_tr
+    keep = np.ones(len(frame_tr), dtype=bool)
+    if len(frame_gt) and len(frame_tr) and np.isin(frame_gt[:, 7], distractor_classes).any():
+        similarity = iou_xywh(frame_gt[:, 2:6], frame_tr[:, 2:6])
+        matching = np.where(similarity >= 0.5 - np.finfo(float).eps, similarity, 0)
+        rows, cols = linear_sum_assignment(-matching)
+        for row, col in zip(rows, cols):
+            if matching[row, col] > 0 and frame_gt[row, 7] in distractor_classes:
+                keep[col] = False
+    scored_gt = frame_gt[(frame_gt[:, 6] != 0) & np.isin(frame_gt[:, 7], eval_classes)]         if len(frame_gt) else frame_gt
+    return scored_gt, frame_tr[keep], int((~keep).sum())
+
+
+def frame_rows(rows: np.ndarray, frame: int, columns: int) -> np.ndarray:
+    return rows[rows[:, 0] == frame] if len(rows) else np.zeros((0, columns))
+
+
 def build_trackeval_data(gt: np.ndarray, tracker: np.ndarray, length: int, *, eval_classes: tuple[int, ...],
                          distractor_classes: tuple[int, ...]) -> dict[str, Any]:
     """Preprocess one sequence into the dict TrackEval metrics' ``eval_sequence`` expects."""
-    from scipy.optimize import linear_sum_assignment
-
     gt_ids: list[np.ndarray] = []
     tracker_ids: list[np.ndarray] = []
     similarities: list[np.ndarray] = []
     removed_as_distractor = 0
     for frame in range(1, length + 1):
-        frame_gt = gt[gt[:, 0] == frame] if len(gt) else np.zeros((0, 9))
-        frame_tr = tracker[tracker[:, 0] == frame] if len(tracker) else np.zeros((0, 10))
-        frame_tr = frame_tr[np.isin(frame_tr[:, 7], eval_classes)] if len(frame_tr) else frame_tr
-        keep = np.ones(len(frame_tr), dtype=bool)
-        if len(frame_gt) and len(frame_tr) and np.isin(frame_gt[:, 7], distractor_classes).any():
-            # Like TrackEval: match against every GT box of the frame, including conf=0 ones.
-            similarity = iou_xywh(frame_gt[:, 2:6], frame_tr[:, 2:6])
-            matching = np.where(similarity >= 0.5 - np.finfo(float).eps, similarity, 0)
-            rows, cols = linear_sum_assignment(-matching)
-            for row, col in zip(rows, cols):
-                if matching[row, col] > 0 and frame_gt[row, 7] in distractor_classes:
-                    keep[col] = False
-        removed_as_distractor += int((~keep).sum())
-        frame_tr = frame_tr[keep]
-        scored_gt = frame_gt[(frame_gt[:, 6] != 0) & np.isin(frame_gt[:, 7], eval_classes)] \
-            if len(frame_gt) else frame_gt
+        scored_gt, frame_tr, removed = preprocess_frame(
+            frame_rows(gt, frame, 9), frame_rows(tracker, frame, 10),
+            eval_classes=eval_classes, distractor_classes=distractor_classes)
+        removed_as_distractor += removed
         gt_ids.append(scored_gt[:, 1].astype(int))
         tracker_ids.append(frame_tr[:, 1].astype(int))
         similarities.append(iou_xywh(scored_gt[:, 2:6], frame_tr[:, 2:6]))

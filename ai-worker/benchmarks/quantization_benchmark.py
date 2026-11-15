@@ -234,7 +234,7 @@ def host_info() -> dict[str, Any]:
 
 def run_configurations(
     video: Path, *, model: str, imgsz: int, conf: float, classes: list[int], cpus: int, repeats: int,
-    include_openvino_fp32: bool,
+    include_openvino_fp32: bool, only: tuple[str, ...] | None = None,
 ) -> tuple[list[str], dict[str, list[dict[str, Any]]], dict[str, int]]:
     """Run every configuration ``repeats`` times, each run in a fresh subprocess. ``video`` may be a
     video file or a directory of frames (read in sorted file-name order)."""
@@ -260,6 +260,8 @@ def run_configurations(
             ov_fp32_dir = _export_openvino_fp32(model, imgsz, workspace / "ov-fp32")
             sizes["ov-fp32"] = _artifact_size(ov_fp32_dir)
             configurations.append("ov-fp32")
+        if only:
+            configurations = [name for name in configurations if name in only]
         for repeat in range(repeats):
             order = configurations if repeat % 2 == 0 else list(reversed(configurations))  # spread drift
             for name in order:
@@ -286,7 +288,7 @@ def _spread(values: list[float]) -> dict[str, float]:
 
 def summarize(configurations: list[str], runs: dict[str, list[dict[str, Any]]], sizes: dict[str, int],
               conf: float) -> dict[str, Any]:
-    reference = runs["fp32"][0]["boxes"]
+    reference = runs["fp32"][0]["boxes"] if "fp32" in runs else None
     results: dict[str, Any] = {}
     for name in configurations:
         repeats = runs[name]
@@ -309,7 +311,8 @@ def summarize(configurations: list[str], runs: dict[str, list[dict[str, Any]]], 
             "detections": first["detections"], "detectionsTotal": sum(first["detections"].values()),
             "tracking": _tracking(first["boxes"]),
             "deterministicAcrossRepeats": all(run["boxes"] == first["boxes"] for run in repeats),
-            **({} if name == "fp32" else {"agreement": _agreement(reference, first["boxes"], conf)}),
+            **({} if name == "fp32" or reference is None
+               else {"agreement": _agreement(reference, first["boxes"], conf)}),
         }
     return results
 
@@ -317,7 +320,7 @@ def summarize(configurations: list[str], runs: dict[str, list[dict[str, Any]]], 
 def gains(results: dict[str, Any]) -> dict[str, Any]:
     """Speed-ups split into the runtime effect (PyTorch -> OpenVINO, both FP32) and the quantization
     effect (OpenVINO FP32 -> INT8). Ratios of medians; >1 means faster."""
-    def ratio(slow: str, fast: str) -> dict[str, float] | None:
+    def ratio(slow: str, fast: str) -> dict[str, float] | None:  # None when a configuration was not run
         if slow not in results or fast not in results:
             return None
         return {"inference": round(results[slow]["inferenceMsMean"] / results[fast]["inferenceMsMean"], 2),
