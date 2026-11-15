@@ -2,13 +2,13 @@
 
 **AI-Powered Video Object Detection Platform**
 
-YOLO Vision Studio runs pretrained YOLO models on videos. Paste a YouTube link, choose a model and detection settings, and the video is processed in the background. You follow progress live, then play the annotated video, review per-class statistics, and download the MP4 and JSON results. A Live Detection page also runs a YOLO Nano model on your webcam in real time.
+YOLO Vision Studio runs pretrained YOLO models on videos. Paste a YouTube link, choose a model and detection settings, and the video is processed in the background. You follow progress live, then play the annotated video, review per-class statistics, and download the MP4 and JSON results. Optional ByteTrack tracking gives each object a persistent Track ID across frames. A Live Detection page also runs a YOLO Nano model on your webcam in real time, with or without tracking.
 
 ## Product Showcase
 
-A 55-second silent overview: the dashboard, configuring a detection job, the service architecture, real annotated results from a completed job, and Live Detection. All product screens are real captures of the running app. In the Live Detection clip, a sample street video is used as the camera input.
+A 55-second silent overview: the dashboard, configuring a detection job with object tracking, the service architecture, a completed tracking job (Track ID labels, trails, and ByteTrack statistics), and Live Detection with live Track IDs. All product screens are real captures of the running app. In the Live Detection clip, a sample street video is used as the camera input.
 
-https://github.com/user-attachments/assets/ff193771-b136-4402-aa20-85f424f79d38
+https://github.com/user-attachments/assets/1db135f4-5bd6-42dd-8dfc-08f206d9dec9
 
 A longer walkthrough is on YouTube: [watch the full demo](https://youtu.be/3vpkPtPq8nk).
 
