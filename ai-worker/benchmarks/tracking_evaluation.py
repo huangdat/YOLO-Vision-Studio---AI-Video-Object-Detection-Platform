@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             only=tuple(args.configurations))
         labels = {name: (args.int8_label if name == "int8" else name) for name in configurations}
         runs = {labels[name]: value for name, value in runs.items()}
-        sizes = {labels[name]: value for name, value in sizes.items()}
+        sizes = {labels[name]: value for name, value in sizes.items() if name in labels}
         configurations = [labels[name] for name in configurations]
         for name in configurations:
             frames = runs[name][0]["boxes"]

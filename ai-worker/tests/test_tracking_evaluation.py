@@ -232,3 +232,36 @@ def test_class_map_parsing_and_consistency_checks(tmp_path: Path) -> None:
         main(["--sequences", str(sequence), "--detect-classes", "2", "--class-map", "0:1"])
     with pytest.raises(SystemExit):
         main(["--sequences", str(sequence), "--class-map", "0:3"])
+
+
+@needs_trackeval
+def test_a_single_labelled_int8_run_is_evaluated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--configurations int8 --int8-label int8-diverse: only that run, reported under its label."""
+    import json
+
+    from benchmarks import tracking_evaluation
+
+    gt = [[frame, 1, 10, 10, 20, 30, 1, 1, 1] for frame in range(1, 4)]
+    sequence = make_sequence(tmp_path, length=3, gt_rows=gt)
+    monkeypatch.setattr(tracking_evaluation, "_check_image_size", lambda sequence: None)
+    boxes = [[[0, 0.9, 10, 10, 30, 40, 1]] for _ in range(3)]
+    run = {"frames": 3, "boxes": boxes, "inferenceMs": [1.0, 2.0], "frameMs": [10.0, 12.0], "loadSeconds": 1.0,
+           "detections": {"person": 3}, "peakRssBytes": 1, "cpuAffinity": None, "torchThreads": 4,
+           "openvinoThreads": 4}
+
+    def fake_runner(video, **options):
+        assert options["only"] == ("int8",) and options["include_openvino_fp32"] is False
+        return ["int8"], {"int8": [run]}, {"fp32": 10, "int8": 5}
+
+    monkeypatch.setattr(tracking_evaluation, "run_configurations", fake_runner)
+    output = tmp_path / "report.json"
+
+    assert main(["--sequences", str(sequence), "--configurations", "int8", "--int8-label", "int8-diverse",
+                 "--repeats", "1", "--predictions-dir", str(tmp_path / "pred"), "--output", str(output)]) == 0
+
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert set(report["accuracy"]) == {"int8-diverse"}
+    assert report["accuracy"]["int8-diverse"]["SYN-01"]["MOTA"] == pytest.approx(1.0)
+    assert report["performance"]["SYN-01"]["results"]["int8-diverse"]["artifactBytes"] == 5
+    assert (tmp_path / "pred" / "int8-diverse" / "data" / "SYN-01.txt").is_file()
+    assert (tmp_path / "pred" / "int8-diverse" / "raw" / "SYN-01.json").is_file()
