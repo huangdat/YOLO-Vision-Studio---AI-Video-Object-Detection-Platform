@@ -1,0 +1,62 @@
+{
+  "manifestVersion": 1,
+  "modelKey": "yolo11n",
+  "format": "openvino-int8",
+  "quantize": 8,
+  "dynamic": true,
+  "imageSize": 960,
+  "source": {
+    "weightsFilename": "yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "sizeBytes": 5613764
+  },
+  "calibration": {
+    "kind": "image-folders",
+    "images": 300,
+    "sources": [
+      {
+        "name": "traffic-calibration",
+        "available": 100,
+        "used": 100,
+        "first": "frame_000000.jpg",
+        "last": "frame_000594.jpg",
+        "fileListSha256": "5061205b9226ccbf7baccb479a69445413a07411045d3036345fdda8f84857bd"
+      },
+      {
+        "name": "MOT17-04-FRCNN/img1",
+        "available": 105,
+        "used": 100,
+        "first": "000001.jpg",
+        "last": "001031.jpg",
+        "fileListSha256": "07e3f288c6262c8c907f9c98e08481cb6b5a0e5ac72427b452af7b5bc550c921"
+      },
+      {
+        "name": "MOT17-13-FRCNN/img1",
+        "available": 108,
+        "used": 100,
+        "first": "000001.jpg",
+        "last": "000743.jpg",
+        "fileListSha256": "dc3f8f81bdf348d125044e241a18b622715dc16cac727316d1b97d38a258c379"
+      }
+    ],
+    "fraction": 1.0
+  },
+  "files": {
+    "metadata.yaml": 1768,
+    "yolo11n.bin": 2676944,
+    "yolo11n.xml": 728440
+  },
+  "validation": {
+    "passed": true,
+    "fakeQuantizeNodes": 101,
+    "boxes": 8,
+    "image": "s0_frame_000000.jpg"
+  },
+  "runtime": {
+    "ultralytics": "8.4.207",
+    "openvino": "2026.4.1",
+    "nncf": "3.4.0",
+    "torch": "2.13.0+cpu"
+  },
+  "createdAt": "2026-11-15T13:58:08+00:00"
+}

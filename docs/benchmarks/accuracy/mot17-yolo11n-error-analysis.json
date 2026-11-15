@@ -1,0 +1,282 @@
+{
+  "reference": "fp32",
+  "perConfiguration": {
+    "fp32": {
+      "recall": {
+        "all": 0.5076,
+        "density 10-19": 0.5989,
+        "density 20-29": 0.4403,
+        "density <10": 0.6898,
+        "density >=30": 0.3356,
+        "size 10-20%": 0.5061,
+        "size 20-40%": 0.7166,
+        "size <10%": 0.1825,
+        "size >=40%": 0.8265,
+        "visibility 0.25-0.5": 0.3966,
+        "visibility 0.5-0.75": 0.597,
+        "visibility <0.25": 0.1235,
+        "visibility >=0.75": 0.8047
+      },
+      "gtBoxes": {
+        "all": 53098,
+        "density 10-19": 17936,
+        "density 20-29": 11620,
+        "density <10": 9025,
+        "density >=30": 14517,
+        "size 10-20%": 14400,
+        "size 20-40%": 10787,
+        "size <10%": 17285,
+        "size >=40%": 10626,
+        "visibility 0.25-0.5": 6565,
+        "visibility 0.5-0.75": 6909,
+        "visibility <0.25": 17115,
+        "visibility >=0.75": 22509
+      },
+      "falsePositiveShareBySize": {
+        "10-20%": 0.1799,
+        "20-40%": 0.1185,
+        "<10%": 0.2438,
+        ">=40%": 0.1177
+      },
+      "meanMatchIoU": 0.7959,
+      "scoreMean": {
+        "truePositives": 0.7057,
+        "falsePositives": 0.4339
+      },
+      "nearThresholdShare": {
+        "truePositives": 0.0372,
+        "falsePositives": 0.1454
+      },
+      "gtTracksMatched": 283,
+      "gtTracksWithIdChange": 165,
+      "idChangesAlongGtTracks": 649,
+      "meanDistinctIdsPerGtTrack": 2.767
+    },
+    "int8": {
+      "recall": {
+        "all": 0.508,
+        "density 10-19": 0.5981,
+        "density 20-29": 0.4412,
+        "density <10": 0.6854,
+        "density >=30": 0.3398,
+        "size 10-20%": 0.5017,
+        "size 20-40%": 0.7132,
+        "size <10%": 0.191,
+        "size >=40%": 0.8239,
+        "visibility 0.25-0.5": 0.3916,
+        "visibility 0.5-0.75": 0.5933,
+        "visibility <0.25": 0.1232,
+        "visibility >=0.75": 0.8083
+      },
+      "gtBoxes": {
+        "all": 53098,
+        "density 10-19": 17936,
+        "density 20-29": 11620,
+        "density <10": 9025,
+        "density >=30": 14517,
+        "size 10-20%": 14400,
+        "size 20-40%": 10787,
+        "size <10%": 17285,
+        "size >=40%": 10626,
+        "visibility 0.25-0.5": 6565,
+        "visibility 0.5-0.75": 6909,
+        "visibility <0.25": 17115,
+        "visibility >=0.75": 22509
+      },
+      "falsePositiveShareBySize": {
+        "10-20%": 0.1643,
+        "20-40%": 0.132,
+        "<10%": 0.2446,
+        ">=40%": 0.1195
+      },
+      "meanMatchIoU": 0.7944,
+      "scoreMean": {
+        "truePositives": 0.7023,
+        "falsePositives": 0.4372
+      },
+      "nearThresholdShare": {
+        "truePositives": 0.0371,
+        "falsePositives": 0.1564
+      },
+      "gtTracksMatched": 281,
+      "gtTracksWithIdChange": 167,
+      "idChangesAlongGtTracks": 643,
+      "meanDistinctIdsPerGtTrack": 2.765
+    },
+    "int8-diverse": {
+      "recall": {
+        "all": 0.513,
+        "density 10-19": 0.602,
+        "density 20-29": 0.4487,
+        "density <10": 0.6788,
+        "density >=30": 0.3512,
+        "size 10-20%": 0.5143,
+        "size 20-40%": 0.7151,
+        "size <10%": 0.1986,
+        "size >=40%": 0.8172,
+        "visibility 0.25-0.5": 0.3976,
+        "visibility 0.5-0.75": 0.5926,
+        "visibility <0.25": 0.1299,
+        "visibility >=0.75": 0.8135
+      },
+      "gtBoxes": {
+        "all": 53098,
+        "density 10-19": 17936,
+        "density 20-29": 11620,
+        "density <10": 9025,
+        "density >=30": 14517,
+        "size 10-20%": 14400,
+        "size 20-40%": 10787,
+        "size <10%": 17285,
+        "size >=40%": 10626,
+        "visibility 0.25-0.5": 6565,
+        "visibility 0.5-0.75": 6909,
+        "visibility <0.25": 17115,
+        "visibility >=0.75": 22509
+      },
+      "falsePositiveShareBySize": {
+        "10-20%": 0.1814,
+        "20-40%": 0.1319,
+        "<10%": 0.2554,
+        ">=40%": 0.1368
+      },
+      "meanMatchIoU": 0.7929,
+      "scoreMean": {
+        "truePositives": 0.7059,
+        "falsePositives": 0.4357
+      },
+      "nearThresholdShare": {
+        "truePositives": 0.0366,
+        "falsePositives": 0.1577
+      },
+      "gtTracksMatched": 287,
+      "gtTracksWithIdChange": 165,
+      "idChangesAlongGtTracks": 677,
+      "meanDistinctIdsPerGtTrack": 2.85
+    },
+    "ov-fp32": {
+      "recall": {
+        "all": 0.5076,
+        "density 10-19": 0.5989,
+        "density 20-29": 0.4403,
+        "density <10": 0.6898,
+        "density >=30": 0.3356,
+        "size 10-20%": 0.5061,
+        "size 20-40%": 0.7166,
+        "size <10%": 0.1825,
+        "size >=40%": 0.8265,
+        "visibility 0.25-0.5": 0.3966,
+        "visibility 0.5-0.75": 0.597,
+        "visibility <0.25": 0.1235,
+        "visibility >=0.75": 0.8047
+      },
+      "gtBoxes": {
+        "all": 53098,
+        "density 10-19": 17936,
+        "density 20-29": 11620,
+        "density <10": 9025,
+        "density >=30": 14517,
+        "size 10-20%": 14400,
+        "size 20-40%": 10787,
+        "size <10%": 17285,
+        "size >=40%": 10626,
+        "visibility 0.25-0.5": 6565,
+        "visibility 0.5-0.75": 6909,
+        "visibility <0.25": 17115,
+        "visibility >=0.75": 22509
+      },
+      "falsePositiveShareBySize": {
+        "10-20%": 0.1799,
+        "20-40%": 0.1185,
+        "<10%": 0.2438,
+        ">=40%": 0.1177
+      },
+      "meanMatchIoU": 0.7959,
+      "scoreMean": {
+        "truePositives": 0.7057,
+        "falsePositives": 0.4339
+      },
+      "nearThresholdShare": {
+        "truePositives": 0.0372,
+        "falsePositives": 0.1454
+      },
+      "gtTracksMatched": 283,
+      "gtTracksWithIdChange": 165,
+      "idChangesAlongGtTracks": 649,
+      "meanDistinctIdsPerGtTrack": 2.767
+    }
+  },
+  "versusReference": {
+    "int8": {
+      "candidateOnlyTruePositive": 500,
+      "referenceOnlyTruePositive": 465,
+      "matchedBoxes": 30728,
+      "referenceOnlyFalsePositive": 665,
+      "candidateOnlyFalsePositive": 670,
+      "scoreDeltaOnMatchedBoxes": {
+        "mean": -0.0021,
+        "median": -0.0018,
+        "stdev": 0.0265,
+        "absMean": 0.0172
+      },
+      "meanIoUWithReferenceBox": 0.9711,
+      "disagreementNearThresholdShare": {
+        "candidateOnlyTruePositive": 0.278,
+        "referenceOnlyTruePositive": 0.2624,
+        "referenceOnlyFalsePositive": 0.2195,
+        "candidateOnlyFalsePositive": 0.2791
+      },
+      "gtTracks": {
+        "candidateMoreIdChanges": 45,
+        "candidateFewerIdChanges": 52,
+        "sameIdChanges": 189
+      }
+    },
+    "int8-diverse": {
+      "candidateOnlyTruePositive": 684,
+      "referenceOnlyTruePositive": 311,
+      "matchedBoxes": 30981,
+      "referenceOnlyFalsePositive": 566,
+      "candidateOnlyFalsePositive": 1019,
+      "scoreDeltaOnMatchedBoxes": {
+        "mean": 0.0063,
+        "median": 0.0043,
+        "stdev": 0.0257,
+        "absMean": 0.016
+      },
+      "meanIoUWithReferenceBox": 0.9694,
+      "disagreementNearThresholdShare": {
+        "candidateOnlyTruePositive": 0.2807,
+        "referenceOnlyTruePositive": 0.2637,
+        "referenceOnlyFalsePositive": 0.1908,
+        "candidateOnlyFalsePositive": 0.2581
+      },
+      "gtTracks": {
+        "candidateMoreIdChanges": 55,
+        "sameIdChanges": 185,
+        "candidateFewerIdChanges": 47
+      }
+    },
+    "ov-fp32": {
+      "matchedBoxes": 31858,
+      "scoreDeltaOnMatchedBoxes": {
+        "mean": 0.0,
+        "median": 0.0,
+        "stdev": 0.0,
+        "absMean": 0.0
+      },
+      "meanIoUWithReferenceBox": 1.0,
+      "disagreementNearThresholdShare": {},
+      "gtTracks": {
+        "sameIdChanges": 283
+      }
+    }
+  },
+  "sequences": [
+    "MOT17-02-FRCNN",
+    "MOT17-05-FRCNN",
+    "MOT17-09-FRCNN",
+    "MOT17-10-FRCNN",
+    "MOT17-11-FRCNN"
+  ]
+}

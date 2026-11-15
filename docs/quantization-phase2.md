@@ -5,6 +5,9 @@ Phase 1 (`feature/model-quantization-poc`; see [quantization-poc.md](quantizatio
 results are kept unchanged). FP32 PyTorch remains the default everywhere. Spring Boot and React are
 unchanged, and so is every public API response.
 
+> **Update (Phase 2.5):** INT8 accuracy has since been measured against MOT17 pedestrian ground truth; see
+> [quantization-accuracy-validation.md](quantization-accuracy-validation.md). Vehicle accuracy is still unvalidated.
+
 Phase 2 covers three things:
 
 1. Tooling to measure **real** tracking accuracy against MOTChallenge ground truth.
