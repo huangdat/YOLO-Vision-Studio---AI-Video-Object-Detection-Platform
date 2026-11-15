@@ -68,6 +68,8 @@ def parser() -> argparse.ArgumentParser:
     calibration.add_argument("--data", help="Ultralytics dataset YAML whose 'val' images are used for calibration")
     calibration.add_argument("--calibration-video", type=Path,
                              help="Local video; evenly spaced frames become an unlabeled calibration set")
+    calibration.add_argument("--calibration-images", type=Path, nargs="+", metavar="DIR",
+                             help="Image folders (e.g. several scenes); --calibration-frames are shared evenly")
     quantize.add_argument("--calibration-frames", type=int, default=300,
                           help="Maximum frames sampled from --calibration-video (default: 300)")
     quantize.add_argument("--calibration-start", type=int, default=0, help="First frame index to sample")
@@ -163,7 +165,9 @@ def _quantize_model(args: argparse.Namespace) -> int:
     import uuid
 
     from app.services.model_loader import ModelLoader
-    from app.services.model_quantization import build_calibration_dataset, export_int8
+    from app.services.model_quantization import (
+        build_calibration_dataset, build_calibration_dataset_from_images, export_int8,
+    )
     from app.services.model_registry import get_model_spec
 
     settings = get_settings()
@@ -177,7 +181,17 @@ def _quantize_model(args: argparse.Namespace) -> int:
         calibration = None
         validation_image = None
         data: str | Path = args.data or ""
-        if args.calibration_video is not None:
+        if args.calibration_images is not None:
+            names = ModelLoader(settings).load(spec.model_key, "cpu", allow_download=False,
+                                               record_verification=False, precision="fp32").names
+            workspace = settings.temp_dir.expanduser().resolve() / f"calibration-{uuid.uuid4().hex[:8]}"
+            image_set = build_calibration_dataset_from_images(
+                args.calibration_images, workspace, names, max_images=args.calibration_frames)
+            data, calibration = image_set.data_yaml, image_set.describe()
+            validation_image = next((workspace / "images" / "val").glob("*"), None)
+            print(f"Calibration set: {image_set.images} images from "
+                  + ", ".join(f"{item['name']} ({item['used']})" for item in image_set.sources), file=sys.stderr)
+        elif args.calibration_video is not None:
             if not args.calibration_video.is_file():
                 print("The calibration video does not exist.", file=sys.stderr)
                 return 2

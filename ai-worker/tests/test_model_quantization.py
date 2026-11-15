@@ -23,7 +23,7 @@ from app.services import model_loader as model_loader_module
 from app.services.model_loader import LoadedModel, ModelLoader, precision_configuration
 from app.services.model_quantization import (
     INT8_FORMAT, MANIFEST_FILENAME, MANIFEST_VERSION, OPENVINO_CPU_DEVICE, Int8Status,
-    build_calibration_dataset, export_int8, inspect_int8_artifact, int8_artifact_dir, limit_openvino_threads,
+    build_calibration_dataset, build_calibration_dataset_from_images, export_int8, inspect_int8_artifact, int8_artifact_dir, limit_openvino_threads,
     sha256_file,
 )
 from app.services.model_registry import get_model_spec
@@ -151,6 +151,34 @@ def test_calibration_frames_are_sampled_evenly_into_an_unlabeled_dataset(tmp_pat
     yaml = dataset.data_yaml.read_text(encoding="utf-8")
     assert "val: images/val" in yaml and '0: "person"' in yaml and '2: "car"' in yaml
     assert dataset.describe()["kind"] == "video-frames"
+
+
+def test_calibration_from_several_folders_shares_images_evenly_and_records_provenance(tmp_path: Path) -> None:
+    for name, count in (("traffic", 10), ("crowd", 4)):
+        (tmp_path / name).mkdir()
+        for index in range(count):
+            (tmp_path / name / f"{index:06d}.jpg").write_bytes(b"jpeg")
+    (tmp_path / "crowd" / "notes.txt").write_text("not an image", encoding="utf-8")
+
+    dataset = build_calibration_dataset_from_images([tmp_path / "traffic", tmp_path / "crowd"],
+                                                    tmp_path / "set", NAMES, max_images=7)
+
+    images = sorted(path.name for path in (tmp_path / "set" / "images" / "val").iterdir())
+    described = dataset.describe()
+    assert dataset.images == 7 and described["kind"] == "image-folders"
+    assert [(s["name"], s["available"], s["used"]) for s in described["sources"]] == [("traffic", 10, 4), ("crowd", 4, 3)]
+    assert images[:4] == ["s0_000000.jpg", "s0_000002.jpg", "s0_000005.jpg", "s0_000007.jpg"]  # evenly spaced
+    assert all(len(source["fileListSha256"]) == 64 for source in described["sources"])
+    assert "val: images/val" in dataset.data_yaml.read_text(encoding="utf-8")
+    with pytest.raises(QuantizationError, match="contains no images"):
+        build_calibration_dataset_from_images([tmp_path / "set"], tmp_path / "other", NAMES)
+
+
+def test_quantize_accepts_image_folders_as_the_calibration_source() -> None:
+    arguments = cli.parser().parse_args(["models", "quantize", "--model", "yolo11n", "--calibration-images", "a", "b"])
+    assert [str(path) for path in arguments.calibration_images] == ["a", "b"]
+    with pytest.raises(SystemExit):
+        cli.main(["models", "quantize", "--model", "yolo11n", "--calibration-images", "a", "--data", "d.yaml"])
 
 
 @pytest.mark.parametrize("arguments", [{"max_images": 0}, {"start_frame": 10, "end_frame": 10},

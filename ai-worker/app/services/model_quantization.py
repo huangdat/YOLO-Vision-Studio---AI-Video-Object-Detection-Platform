@@ -208,6 +208,61 @@ def build_calibration_dataset(
 
 
 @dataclass(frozen=True)
+class ImageCalibrationDataset:
+    data_yaml: Path
+    images: int
+    sources: tuple[dict[str, Any], ...]
+
+    def describe(self) -> dict[str, Any]:
+        return {"kind": "image-folders", "images": self.images, "sources": list(self.sources)}
+
+
+CALIBRATION_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp"}
+
+
+def build_calibration_dataset_from_images(
+    sources: list[Path], output_dir: Path, names: dict[int, str], *,
+    max_images: int = RECOMMENDED_CALIBRATION_IMAGES,
+) -> ImageCalibrationDataset:
+    """Combine evenly spaced images from several folders (for example frames of different scenes)
+    into one unlabeled calibration set. Each source gets an equal share of ``max_images``; the
+    manifest records, per source, how many images were used and a SHA-256 of their file names."""
+    if max_images < 1 or not sources:
+        raise QuantizationError("At least one calibration image and one source folder are required.")
+    listings = []
+    for source in sources:
+        files = sorted(path for path in Path(source).iterdir()
+                       if path.is_file() and path.suffix.lower() in CALIBRATION_IMAGE_SUFFIXES) \
+            if Path(source).is_dir() else []
+        if not files:
+            raise QuantizationError(f"Calibration folder {Path(source).name} contains no images.")
+        listings.append(files)
+    images_dir = output_dir / "images" / "val"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    quotas = [max_images // len(sources) + (1 if index < max_images % len(sources) else 0)
+              for index in range(len(sources))]
+    provenance = []
+    for index, (source, files, quota) in enumerate(zip(sources, listings, quotas)):
+        quota = min(quota, len(files))
+        step = len(files) / quota if quota else 1
+        chosen = [files[int(position * step)] for position in range(quota)]
+        for path in chosen:
+            shutil.copy2(path, images_dir / f"s{index}_{path.name}")
+        digest = hashlib.sha256("\n".join(path.name for path in chosen).encode("utf-8")).hexdigest()
+        provenance.append({"name": Path(source).name, "available": len(files), "used": len(chosen),
+                           "first": chosen[0].name, "last": chosen[-1].name, "fileListSha256": digest})
+    total = sum(item["used"] for item in provenance)
+    data_yaml = output_dir / "data.yaml"
+    lines = [f"path: {json.dumps(str(output_dir.resolve()))}", "train: images/val", "val: images/val", "names:"]
+    lines += [f"  {key}: {json.dumps(value)}" for key, value in sorted(names.items())]
+    data_yaml.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if total < RECOMMENDED_CALIBRATION_IMAGES:
+        logger.warning("Only %d calibration images; about %d are recommended for INT8 calibration",
+                       total, RECOMMENDED_CALIBRATION_IMAGES)
+    return ImageCalibrationDataset(data_yaml, total, tuple(provenance))
+
+
+@dataclass(frozen=True)
 class Int8ExportResult:
     status: Int8ArtifactStatus
     fp32_size_bytes: int
