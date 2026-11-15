@@ -323,6 +323,9 @@ def main(argv: list[str] | None = None) -> int:
     worker = build_worker(settings)
     worker.install_signal_handlers()
     logger.info("Detection worker starting; no model is loaded until a job requires it")
+    from app.services.model_loader import precision_configuration
+
+    logger.info(precision_configuration(settings))
     return worker.run()
 
 

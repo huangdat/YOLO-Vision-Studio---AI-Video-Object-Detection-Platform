@@ -19,7 +19,8 @@ from app import cli
 from app.config.settings import Settings
 from app.core.exceptions import ModelLoadingError, QuantizationError
 from app.services.detection_service import DetectionService
-from app.services.model_loader import LoadedModel, ModelLoader
+from app.services import model_loader as model_loader_module
+from app.services.model_loader import LoadedModel, ModelLoader, precision_configuration
 from app.services.model_quantization import (
     INT8_FORMAT, MANIFEST_FILENAME, MANIFEST_VERSION, OPENVINO_CPU_DEVICE, Int8Status,
     build_calibration_dataset, export_int8, inspect_int8_artifact, int8_artifact_dir, limit_openvino_threads,
@@ -192,6 +193,8 @@ def loader_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=Mock(side_effect=factory)))
+    # CI has no OpenVINO; the runtime check is pinned so these tests exercise the INT8 path everywhere.
+    monkeypatch.setattr(model_loader_module, "openvino_available", lambda: True)
     return torch, models
 
 
@@ -289,6 +292,52 @@ def test_openvino_backend_is_recompiled_with_the_configured_thread_count(tmp_pat
     assert backend.ov_compiled_model.config == {"PERFORMANCE_HINT": "LATENCY", "INFERENCE_NUM_THREADS": 3}
     assert backend.compile_model("again").config["INFERENCE_NUM_THREADS"] == 3  # later reshapes keep the cap
     assert limit_openvino_threads(SimpleNamespace(predictor=None), 3, tmp_path) is None
+
+
+def test_missing_openvino_runtime_falls_back_or_fails_strictly(
+    tmp_path: Path, loader_environment, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    _, models = loader_environment
+    monkeypatch.setattr(model_loader_module, "openvino_available", lambda: False)
+    settings = settings_for(tmp_path, model_precision="int8")
+    write_artifact(settings, source=write_weights(settings))
+
+    with caplog.at_level(logging.WARNING):
+        loaded = ModelLoader(settings).load("yolo11n", "cpu", record_verification=False)
+    assert (loaded.precision, loaded.runtime) == ("fp32", "PyTorch")
+    assert "OpenVINO is not installed" in caplog.text
+    with pytest.raises(ModelLoadingError, match="OpenVINO is not installed"):
+        ModelLoader(settings).load("yolo11n", "cpu", precision="int8")
+    assert all(model.path.endswith(".pt") for model in models)
+
+
+def test_int8_runtime_initialisation_failure_falls_back_or_fails_strictly(
+    tmp_path: Path, loader_environment, caplog: pytest.LogCaptureFixture,
+) -> None:
+    _, models = loader_environment
+    settings = settings_for(tmp_path, model_precision="int8")
+    write_artifact(settings, source=write_weights(settings))
+    broken = SimpleNamespace(names=dict(NAMES), predict=Mock(side_effect=RuntimeError("compile failed")))
+    sys.modules["ultralytics"].YOLO.side_effect = lambda path, task=None: (
+        broken if task == "detect" else SimpleNamespace(names=dict(NAMES), to=Mock(), path=path))
+
+    with caplog.at_level(logging.WARNING):
+        loaded = ModelLoader(settings).load("yolo11n", "cpu", record_verification=False)
+    assert loaded.precision == "fp32" and loaded.model.path.endswith("yolo11n.pt")
+    assert "INT8 runtime could not be initialised" in caplog.text
+    with pytest.raises(ModelLoadingError, match="could not be loaded"):
+        ModelLoader(settings).load("yolo11n", "cpu", precision="int8")
+
+
+def test_effective_runtime_and_startup_configuration_are_reported(tmp_path: Path, monkeypatch) -> None:
+    int8 = LoadedModel(object(), "yolo11n", "cpu", NAMES, precision="int8", runtime_device=OPENVINO_CPU_DEVICE)
+    fp32 = LoadedModel(object(), "yolo11n", "cpu", NAMES)
+
+    assert (int8.runtime, fp32.runtime, fp32.precision, fp32.predict_device) == ("OpenVINO", "PyTorch", "fp32", "cpu")
+    assert precision_configuration(settings_for(tmp_path)) == "Model precision: FP32 (PyTorch)"
+    monkeypatch.setattr(model_loader_module, "openvino_available", lambda: False)
+    line = precision_configuration(settings_for(tmp_path, model_precision="int8"))
+    assert "INT8 requested" in line and "OpenVINO installed: False" in line and "fallback to FP32: True" in line
 
 
 def test_inference_uses_the_runtime_device_of_an_int8_model() -> None:

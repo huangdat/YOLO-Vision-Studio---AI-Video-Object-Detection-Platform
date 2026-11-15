@@ -40,6 +40,9 @@ def create_live_app(service: LiveInferenceService | None = None, settings: Setti
             "max frame %d bytes); models load on first use from the prepared cache only",
             settings.live_max_loaded_models, settings.live_max_concurrent_inferences,
             settings.live_model_sizes, settings.live_max_frame_bytes)
+        from app.services.model_loader import precision_configuration
+
+        logger.info(precision_configuration(settings))
         yield
         service.tracking.close_all()
         logger.info("Live worker stopped")

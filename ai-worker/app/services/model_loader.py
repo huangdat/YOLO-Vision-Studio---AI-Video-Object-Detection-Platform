@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import importlib
 from importlib import metadata
+from importlib.util import find_spec
 import json
 import logging
 import os
@@ -18,6 +19,19 @@ from app.services.model_registry import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def openvino_available() -> bool:
+    """Whether the optional OpenVINO runtime is installed (checked without importing it)."""
+    return find_spec("openvino") is not None
+
+
+def precision_configuration(settings: Settings) -> str:
+    """One startup log line describing the configured precision; per-model loads log what was used."""
+    if settings.model_precision == "fp32":
+        return "Model precision: FP32 (PyTorch)"
+    return (f"Model precision: INT8 requested (OpenVINO installed: {openvino_available()}, "
+            f"fallback to FP32: {settings.int8_fallback_to_fp32}, artifacts: {settings.quantized_models_path})")
 
 
 def _package_version(*names: str) -> str | None:
@@ -46,6 +60,11 @@ class LoadedModel:
     @property
     def predict_device(self) -> str:
         return self.runtime_device or self.device
+
+    @property
+    def runtime(self) -> str:
+        """The inference runtime actually in use (logged; never inferred from configuration)."""
+        return "OpenVINO" if (self.runtime_device or "").startswith("intel") else "PyTorch"
 
 
 class ModelLoader:
@@ -98,8 +117,8 @@ class ModelLoader:
         if requested_precision not in {"fp32", "int8"}:
             raise ModelLoadingError("Precision must be fp32 or int8.")
         int8_artifact = None
+        strict = precision is not None or not self.settings.int8_fallback_to_fp32
         if requested_precision == "int8":
-            strict = precision is not None or not self.settings.int8_fallback_to_fp32
             int8_artifact = self._int8_artifact(spec, actual_device, strict)
         cache_dir = self.settings.model_cache_dir.expanduser().resolve()
         cache_key = (str(cache_dir), model_key, actual_device, "int8" if int8_artifact is not None else "fp32")
@@ -107,7 +126,16 @@ class ModelLoader:
             if cache_key in self._cache:
                 return self._cache[cache_key]
             if int8_artifact is not None:
-                return self._load_int8(torch, spec, int8_artifact, cache_dir, cache_key)
+                try:
+                    return self._load_int8(torch, spec, int8_artifact, cache_dir, cache_key)
+                except ModelLoadingError as error:
+                    if strict:
+                        raise
+                    logger.warning("Using the FP32 model for %s; the INT8 runtime could not be initialised (%s)",
+                                   model_key, error.__cause__ or error)
+                    cache_key = (str(cache_dir), model_key, actual_device, "fp32")
+                    if cache_key in self._cache:
+                        return self._cache[cache_key]
             weights = cache_dir / filename
             if weights.is_symlink() or not weights.resolve().is_relative_to(cache_dir):
                 raise ModelLoadingError("Model weights must remain inside the configured model cache.")
@@ -123,7 +151,7 @@ class ModelLoader:
                 ultralytics = importlib.import_module("ultralytics")
                 if actual_device == "cpu":
                     torch.set_num_threads(self.settings.cpu_threads)
-                logger.info("Loading model %s on %s", model_key, actual_device)
+                logger.info("Loading model %s on %s (fp32, PyTorch)", model_key, actual_device)
                 model = ultralytics.YOLO(str(weights))
                 model.to(actual_device)
                 raw_names = model.names
@@ -157,6 +185,8 @@ class ModelLoader:
 
         if device != "cpu":
             reason = f"INT8 OpenVINO models run on CPU only, but {device} was selected"
+        elif not openvino_available():
+            reason = "OpenVINO is not installed in this image (build with INSTALL_OPENVINO=true)"
         else:
             status = inspect_int8_artifact(self.settings, spec)
             if status.available:

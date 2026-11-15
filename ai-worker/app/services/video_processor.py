@@ -112,6 +112,9 @@ class VideoProcessor:
         classes = request.classes if request.classes is not None else DEFAULT_CLASSES.copy()
         device = request.device or self.settings.ai_device
         loaded = self.model_loader.load(request.model_key, device)
+        logger.info("Inference for %s uses %s %s on %s", loaded.model_key,
+                    str(getattr(loaded, "precision", "fp32")).upper(), getattr(loaded, "runtime", "PyTorch"),
+                    getattr(loaded, "predict_device", loaded.device))
         cv2 = self._opencv()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         # MJPG and yuv420p output both need even dimensions; padding preserves edge pixels.
