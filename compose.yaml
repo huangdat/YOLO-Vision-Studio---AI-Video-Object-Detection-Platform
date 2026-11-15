@@ -45,6 +45,10 @@ x-ai-environment: &ai-environment
   AI_FALLBACK_FPS: ${AI_FALLBACK_FPS:-30}
   AI_PROCESSING_TIMEOUT_SECONDS: ${AI_PROCESSING_TIMEOUT_SECONDS:-1800}
   AI_YOUTUBE_JS_RUNTIME: ${AI_YOUTUBE_JS_RUNTIME:-deno}
+  # Optional INT8 (OpenVINO) inference; see docs/quantization-phase2.md. FP32 stays the default.
+  AI_MODEL_PRECISION: ${AI_MODEL_PRECISION:-fp32}
+  AI_INT8_FALLBACK_TO_FP32: ${AI_INT8_FALLBACK_TO_FP32:-true}
+  AI_QUANTIZED_MODEL_DIR: /data/models/quantized
 
 services:
   frontend:
@@ -111,6 +115,8 @@ services:
     <<: *service-defaults
     build:
       context: ./ai-worker
+      args:
+        INSTALL_OPENVINO: ${AI_WORKER_INSTALL_OPENVINO:-false}
     environment:
       <<: [*messaging-environment, *ai-environment]
       AI_WORKER_HOST: "0.0.0.0"
@@ -134,6 +140,8 @@ services:
     <<: *service-defaults
     build:
       context: ./ai-worker
+      args:
+        INSTALL_OPENVINO: ${AI_WORKER_INSTALL_OPENVINO:-false}
     command: [python, -m, app.workers.rabbitmq_worker]
     stop_grace_period: ${WORKER_STOP_GRACE_PERIOD:-90s}
     environment:
@@ -168,6 +176,8 @@ services:
     <<: *service-defaults
     build:
       context: ./ai-worker
+      args:
+        INSTALL_OPENVINO: ${AI_WORKER_INSTALL_OPENVINO:-false}
     command: [python, -m, app.live_server]
     environment:
       AI_DEVICE: ${AI_DEVICE:-auto}
@@ -179,6 +189,9 @@ services:
       LIVE_MAX_FRAME_BYTES: ${LIVE_MAX_FRAME_BYTES:-524288}
       LIVE_MODEL_SIZES: ${LIVE_MODEL_SIZES:-n}
       LIVE_MAX_LOADED_MODELS: ${LIVE_MAX_LOADED_MODELS:-1}
+      AI_MODEL_PRECISION: ${AI_MODEL_PRECISION:-fp32}
+      AI_INT8_FALLBACK_TO_FP32: ${AI_INT8_FALLBACK_TO_FP32:-true}
+      AI_QUANTIZED_MODEL_DIR: /data/models/quantized
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - ai-model-cache:/data/models:ro

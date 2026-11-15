@@ -38,5 +38,15 @@ COPY requirements-ai-cpu.txt requirements-ai.txt ./
 RUN pip install --no-cache-dir -r requirements-ai-cpu.txt \
     && pip install --no-cache-dir -r requirements-ai.txt \
     && pip check
+# Optional OpenVINO INT8 runtime (docs/quantization-phase2.md). Off by default, so the default image
+# and its cached layers are unchanged; build with --build-arg INSTALL_OPENVINO=true to add it.
+# INT8 is still only used when AI_MODEL_PRECISION=int8 and an exported artifact exists.
+ARG INSTALL_OPENVINO=false
+COPY requirements-quantization.txt ./
+RUN if [ "$INSTALL_OPENVINO" = "true" ]; then \
+        pip install --no-cache-dir -r requirements-quantization.txt && pip check; \
+    elif [ "$INSTALL_OPENVINO" != "false" ]; then \
+        echo "INSTALL_OPENVINO must be true or false" >&2; exit 1; \
+    fi
 COPY --chown=worker:worker app ./app
 USER worker
