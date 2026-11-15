@@ -172,6 +172,10 @@ def test_calibration_from_several_folders_shares_images_evenly_and_records_prove
     assert "val: images/val" in dataset.data_yaml.read_text(encoding="utf-8")
     with pytest.raises(QuantizationError, match="contains no images"):
         build_calibration_dataset_from_images([tmp_path / "set"], tmp_path / "other", NAMES)
+    (tmp_path / "MOT17-04" / "img1").mkdir(parents=True)
+    (tmp_path / "MOT17-04" / "img1" / "000001.jpg").write_bytes(b"jpeg")
+    generic = build_calibration_dataset_from_images([tmp_path / "MOT17-04" / "img1"], tmp_path / "mot", NAMES)
+    assert generic.sources[0]["name"] == "MOT17-04/img1"  # generic frame folders keep their sequence name
 
 
 def test_quantize_accepts_image_folders_as_the_calibration_source() -> None:

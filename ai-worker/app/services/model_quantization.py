@@ -218,6 +218,7 @@ class ImageCalibrationDataset:
 
 
 CALIBRATION_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp"}
+GENERIC_IMAGE_FOLDERS = {"img1", "images", "image", "frames", "val", "train"}
 
 
 def build_calibration_dataset_from_images(
@@ -249,7 +250,10 @@ def build_calibration_dataset_from_images(
         for path in chosen:
             shutil.copy2(path, images_dir / f"s{index}_{path.name}")
         digest = hashlib.sha256("\n".join(path.name for path in chosen).encode("utf-8")).hexdigest()
-        provenance.append({"name": Path(source).name, "available": len(files), "used": len(chosen),
+        folder = Path(source).resolve()
+        # Generic frame folders (MOT "img1", "images", ...) are named with their parent for provenance.
+        name = f"{folder.parent.name}/{folder.name}" if folder.name.lower() in GENERIC_IMAGE_FOLDERS else folder.name
+        provenance.append({"name": name, "available": len(files), "used": len(chosen),
                            "first": chosen[0].name, "last": chosen[-1].name, "fileListSha256": digest})
     total = sum(item["used"] for item in provenance)
     data_yaml = output_dir / "data.yaml"
