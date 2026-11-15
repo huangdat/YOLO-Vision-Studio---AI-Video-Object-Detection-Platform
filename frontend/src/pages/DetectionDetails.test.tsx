@@ -146,6 +146,48 @@ describe("Detection details page", () => {
     expect(screen.queryByText("Unique track IDs")).toBeNull();
   });
 
+  it("shows the requested and the executed precision from the worker result", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100, inferencePrecision: "INT8" }));
+    vi.mocked(getDetectionResult).mockResolvedValueOnce(
+      result({ effectivePrecision: "INT8", inferenceRuntime: "OPENVINO" }));
+    renderJob();
+
+    expect(await screen.findByText("Executed: OpenVINO INT8")).toBeTruthy();
+    expect(screen.getByText("Requested: INT8")).toBeTruthy();
+  });
+
+  it("never derives the executed precision from the request", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100, inferencePrecision: null }));
+    vi.mocked(getDetectionResult).mockResolvedValueOnce(result({ effectivePrecision: null, inferenceRuntime: null }));
+    renderJob();
+
+    expect(await screen.findByText("Executed: Not reported by the worker")).toBeTruthy();
+    expect(screen.getByText("Requested: Not recorded")).toBeTruthy();
+    expect(screen.queryByText(/OpenVINO|PyTorch/)).toBeNull();
+  });
+
+  it("shows a pending execution for jobs that have not completed", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "DETECTING", progress: 40, inferencePrecision: "INT8" }));
+    renderJob();
+
+    expect(await screen.findByText("Executed: Pending")).toBeTruthy();
+    expect(screen.getByText("Requested: INT8")).toBeTruthy();
+  });
+
+  it("explains an unavailable INT8 model with an actionable message", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({
+      status: "FAILED", progress: 0, inferencePrecision: "INT8", errorCode: "INT8_MODEL_UNAVAILABLE",
+      errorMessage: "INT8 model for yolo11n is unavailable (NOT_EXPORTED: No INT8 artifact has been exported).",
+    }));
+    renderJob();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("INT8_MODEL_UNAVAILABLE");
+    expect(alert.textContent).toContain("NOT_EXPORTED");
+    expect(alert.textContent).toContain("start the job again with FP32");
+    expect(getDetectionResult).not.toHaveBeenCalled();
+  });
+
   it("explains a completed job without detections", async () => {
     vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100 }));
     vi.mocked(getDetectionResult).mockResolvedValue(result({ detectionSummary: {}, totalDetections: 0 }));

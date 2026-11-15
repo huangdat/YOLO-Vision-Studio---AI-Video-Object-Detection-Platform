@@ -20,6 +20,12 @@ export type DetectionSourceType = "YOUTUBE_URL" | "LOCAL_FILE";
  */
 export type ProcessingMode = "DETECTION_ONLY" | "DETECTION_TRACKING";
 
+/** Requested per-job inference precision. FP32 is the default; INT8 is opt-in and experimental. */
+export type InferencePrecision = "FP32" | "INT8";
+
+/** Runtime the worker actually used, as reported in the job result. */
+export type InferenceRuntime = "PYTORCH" | "OPENVINO";
+
 /** DetectionJobDetailsResponse (GET /detections/{jobId}). */
 export interface DetectionJob {
   jobId: string;
@@ -40,6 +46,8 @@ export interface DetectionJob {
   errorCode: string | null;
   errorMessage: string | null;
   processingMode: ProcessingMode;
+  /** Requested precision; null only from backends without precision support. */
+  inferencePrecision: InferencePrecision | null;
 }
 
 /** DetectionJobSummaryResponse (one row of GET /detections). */
@@ -52,6 +60,7 @@ export interface DetectionJobSummary {
   completedAt: string | null;
   errorCode: string | null;
   processingMode: ProcessingMode;
+  inferencePrecision: InferencePrecision | null;
 }
 
 export interface DetectionHistoryQuery {
@@ -82,6 +91,9 @@ export interface DetectionResultMetadata {
   processingMode: ProcessingMode;
   /** Only for tracking jobs whose worker reported tracking totals. */
   tracking: TrackingSummary | null;
+  /** What the worker actually ran; null for results stored before workers reported it. */
+  effectivePrecision: InferencePrecision | null;
+  inferenceRuntime: InferenceRuntime | null;
 }
 
 /**
@@ -116,6 +128,7 @@ export interface CreateDetectionRequest {
   imageSize: number;
   classes: number[];
   processingMode: ProcessingMode;
+  inferencePrecision: InferencePrecision;
 }
 
 /** DetectionJobAcceptedResponse, returned with HTTP 202 and a Location header. */

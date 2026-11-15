@@ -36,6 +36,7 @@ export function summary(overrides: Partial<DetectionJobSummary> = {}): Detection
     completedAt: "2026-11-08T11:13:38Z",
     errorCode: null,
     processingMode: "DETECTION_ONLY",
+    inferencePrecision: "FP32",
     ...overrides,
   };
 }
@@ -70,6 +71,7 @@ export function job(overrides: Partial<DetectionJob> = {}): DetectionJob {
     errorCode: null,
     errorMessage: null,
     processingMode: "DETECTION_ONLY",
+    inferencePrecision: "FP32",
     ...overrides,
   };
 }
@@ -91,6 +93,8 @@ export function result(overrides: Partial<DetectionResultMetadata> = {}): Detect
     completedAt: "2026-11-08T11:13:38Z",
     processingMode: "DETECTION_ONLY",
     tracking: null,
+    effectivePrecision: "FP32",
+    inferenceRuntime: "PYTORCH",
     ...overrides,
   };
 }

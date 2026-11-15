@@ -2131,6 +2131,77 @@ fieldset:disabled .class-option {
 .tracking-summary {
   margin-top: 24px;
 }
+
+/* Inference precision (FP32 / experimental INT8) ------------------------------------------------ */
+.precision-selector {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+.precision-legend {
+  padding: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.precision-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.precision-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.precision-option.is-selected {
+  border-color: var(--primary-soft-strong);
+  background: var(--primary-soft);
+}
+.precision-option input {
+  flex: none;
+  margin-top: 3px;
+  accent-color: var(--primary);
+}
+.precision-option-title {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+.precision-option-detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.precision-selector .field-hint {
+  margin: 10px 0 0;
+}
+.precision-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.precision-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .tracking-classes {
   margin-top: 12px;
 }

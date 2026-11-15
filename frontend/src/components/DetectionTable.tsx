@@ -49,6 +49,9 @@ export function DetectionTable({
                 {job.processingMode === "DETECTION_TRACKING" && (
                   <span className="tracking-tag" title="Detection + Tracking (ByteTrack)">Tracking</span>
                 )}
+                {job.inferencePrecision === "INT8" && (
+                  <span className="precision-tag" title="INT8 requested (experimental)">INT8</span>
+                )}
               </td>
               <td data-label="Status">
                 <span className="status-cell">

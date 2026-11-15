@@ -18,6 +18,7 @@ describe("detection form", () => {
       imageSize: 640,
       classes: [1, 2, 3, 5, 7],
       tracking: false,
+      precision: "FP32",
     });
   });
 
@@ -54,7 +55,14 @@ describe("detection form", () => {
 
   it("reports each invalid field", () => {
     const errors = validateForm(
-      { videoUrl: "https://example.com", confidence: "1.5", imageSize: 500, classes: [], tracking: false },
+      {
+        videoUrl: "https://example.com",
+        confidence: "1.5",
+        imageSize: 500,
+        classes: [],
+        tracking: false,
+        precision: "FP32",
+      },
       enabled,
     );
     expect(Object.keys(errors).sort()).toEqual(["classes", "confidence", "imageSize", "videoUrl"]);
@@ -74,9 +82,15 @@ describe("detection form", () => {
       imageSize: 960,
       classes: [0, 2, 7],
       processingMode: "DETECTION_ONLY",
+      inferencePrecision: "FP32",
     });
     expect(Object.keys(body).sort()).toEqual(
-      ["classes", "confidence", "imageSize", "modelKey", "processingMode", "videoUrl"]);
+      ["classes", "confidence", "imageSize", "inferencePrecision", "modelKey", "processingMode", "videoUrl"]);
+  });
+
+  it("sends INT8 only when it was selected", () => {
+    expect(toRequest(valid(), enabled).inferencePrecision).toBe("FP32");
+    expect(toRequest(valid({ precision: "INT8" }), enabled).inferencePrecision).toBe("INT8");
   });
 
   it("requests ByteTrack only when tracking is switched on", () => {
