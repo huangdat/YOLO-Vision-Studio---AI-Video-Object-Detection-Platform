@@ -218,6 +218,115 @@ def _export_openvino_fp32(model: str, imgsz: int, target: Path) -> Path:
                                                      device="cpu", verbose=False))
 
 
+def host_info() -> dict[str, Any]:
+    from importlib import metadata
+
+    def version(name: str) -> str | None:
+        try:
+            return metadata.version(name)
+        except metadata.PackageNotFoundError:
+            return None
+
+    return {"processor": platform.processor(), "system": platform.platform(),
+            "ultralytics": version("ultralytics-opencv-headless") or version("ultralytics"),
+            "torch": version("torch"), "openvino": version("openvino")}
+
+
+def run_configurations(
+    video: Path, *, model: str, imgsz: int, conf: float, classes: list[int], cpus: int, repeats: int,
+    include_openvino_fp32: bool,
+) -> tuple[list[str], dict[str, list[dict[str, Any]]], dict[str, int]]:
+    """Run every configuration ``repeats`` times, each run in a fresh subprocess. ``video`` may be a
+    video file or a directory of frames (read in sorted file-name order)."""
+    from app.config.settings import Settings
+    from app.services.model_quantization import inspect_int8_artifact, int8_artifact_dir
+    from app.services.model_registry import get_model_spec
+
+    settings = Settings()
+    spec = get_model_spec(model)
+    if spec is None:
+        raise RuntimeError(f"Unsupported model {model}")
+    status = inspect_int8_artifact(settings, spec)
+    if not status.available:
+        raise RuntimeError(f"INT8 artifact for {model} unavailable: {status.reason}")
+    workspace = Path(tempfile.mkdtemp(prefix="quant-bench-", dir=settings.temp_dir.resolve()))
+    configurations = ["fp32", "int8"]
+    sizes = {"fp32": _artifact_size(settings.model_cache_dir.resolve() / spec.weights_filename),
+             "int8": _artifact_size(int8_artifact_dir(settings.quantized_models_path.resolve(), spec))}
+    ov_fp32_dir = None
+    runs: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    try:
+        if include_openvino_fp32:
+            ov_fp32_dir = _export_openvino_fp32(model, imgsz, workspace / "ov-fp32")
+            sizes["ov-fp32"] = _artifact_size(ov_fp32_dir)
+            configurations.append("ov-fp32")
+        for repeat in range(repeats):
+            order = configurations if repeat % 2 == 0 else list(reversed(configurations))  # spread drift
+            for name in order:
+                result = workspace / f"{name}-{repeat}.json"
+                command = [sys.executable, "-m", "benchmarks.quantization_benchmark", "--run-one", name,
+                           "--video", str(video), "--model", model, "--imgsz", str(imgsz),
+                           "--conf", str(conf), "--classes", ",".join(map(str, classes)),
+                           "--cpus", str(cpus), "--result", str(result)]
+                if ov_fp32_dir is not None:
+                    command += ["--ov-fp32-dir", str(ov_fp32_dir)]
+                subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+                runs[name].append(json.loads(result.read_text(encoding="utf-8")))
+                print(f"{Path(video).name} {model}: repeat {repeat + 1}/{repeats} {name} done", file=sys.stderr)
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+    return configurations, runs, sizes
+
+
+def _spread(values: list[float]) -> dict[str, float]:
+    return {"median": round(statistics.median(values), 2), "min": round(min(values), 2),
+            "max": round(max(values), 2),
+            "stdev": round(statistics.stdev(values), 2) if len(values) > 1 else 0.0}
+
+
+def summarize(configurations: list[str], runs: dict[str, list[dict[str, Any]]], sizes: dict[str, int],
+              conf: float) -> dict[str, Any]:
+    reference = runs["fp32"][0]["boxes"]
+    results: dict[str, Any] = {}
+    for name in configurations:
+        repeats = runs[name]
+        first = repeats[0]
+        per_run_mean = [statistics.mean(run["inferenceMs"]) for run in repeats]
+        per_run_p95 = [_percentile(run["inferenceMs"], 0.95) for run in repeats]
+        per_run_fps = [1000 / statistics.mean(run["frameMs"]) for run in repeats]
+        results[name] = {
+            "inferenceMsMean": round(statistics.median(per_run_mean), 2),
+            "inferenceMsP95": round(statistics.median(per_run_p95), 2),
+            "endToEndFps": round(statistics.median(per_run_fps), 2),
+            "endToEndFpsRange": [round(min(per_run_fps), 2), round(max(per_run_fps), 2)],
+            "variance": {"inferenceMsMean": _spread(per_run_mean), "inferenceMsP95": _spread(per_run_p95),
+                         "endToEndFps": _spread(per_run_fps)},
+            "artifactBytes": sizes[name],
+            "peakRssBytes": max(run["peakRssBytes"] or 0 for run in repeats) or None,
+            "loadSeconds": round(statistics.median(run["loadSeconds"] for run in repeats), 2),
+            "torchThreads": first["torchThreads"], "openvinoThreads": first["openvinoThreads"],
+            "cpuAffinity": first["cpuAffinity"],
+            "detections": first["detections"], "detectionsTotal": sum(first["detections"].values()),
+            "tracking": _tracking(first["boxes"]),
+            "deterministicAcrossRepeats": all(run["boxes"] == first["boxes"] for run in repeats),
+            **({} if name == "fp32" else {"agreement": _agreement(reference, first["boxes"], conf)}),
+        }
+    return results
+
+
+def gains(results: dict[str, Any]) -> dict[str, Any]:
+    """Speed-ups split into the runtime effect (PyTorch -> OpenVINO, both FP32) and the quantization
+    effect (OpenVINO FP32 -> INT8). Ratios of medians; >1 means faster."""
+    def ratio(slow: str, fast: str) -> dict[str, float] | None:
+        if slow not in results or fast not in results:
+            return None
+        return {"inference": round(results[slow]["inferenceMsMean"] / results[fast]["inferenceMsMean"], 2),
+                "endToEnd": round(results[fast]["endToEndFps"] / results[slow]["endToEndFps"], 2)}
+
+    return {"runtime(fp32->ov-fp32)": ratio("fp32", "ov-fp32"),
+            "quantization(ov-fp32->int8)": ratio("ov-fp32", "int8"), "total(fp32->int8)": ratio("fp32", "int8")}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--video", required=True, type=Path)
@@ -239,71 +348,21 @@ def main(argv: list[str] | None = None) -> int:
         args.result.write_text(json.dumps(_run_one(args)), encoding="utf-8")
         return 0
 
-    from app.config.settings import Settings
-    from app.services.model_quantization import inspect_int8_artifact, int8_artifact_dir
-    from app.services.model_registry import get_model_spec
-
-    settings = Settings()
-    spec = get_model_spec(args.model)
-    status = inspect_int8_artifact(settings, spec)
-    if not status.available:
-        print(f"INT8 artifact unavailable: {status.reason}", file=sys.stderr)
-        return 2
-    workspace = Path(tempfile.mkdtemp(prefix="quant-bench-", dir=settings.temp_dir.resolve()))
-    configurations = ["fp32", "int8"]
-    sizes = {"fp32": _artifact_size(settings.model_cache_dir.resolve() / spec.weights_filename),
-             "int8": _artifact_size(int8_artifact_dir(settings.quantized_models_path.resolve(), spec))}
-    ov_fp32_dir = None
     try:
-        if args.include_openvino_fp32:
-            ov_fp32_dir = _export_openvino_fp32(args.model, args.imgsz, workspace / "ov-fp32")
-            sizes["ov-fp32"] = _artifact_size(ov_fp32_dir)
-            configurations.append("ov-fp32")
-        runs: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for repeat in range(args.repeats):
-            order = configurations if repeat % 2 == 0 else list(reversed(configurations))  # spread drift
-            for name in order:
-                result = workspace / f"{name}-{repeat}.json"
-                command = [sys.executable, "-m", "benchmarks.quantization_benchmark", "--run-one", name,
-                           "--video", str(args.video), "--model", args.model, "--imgsz", str(args.imgsz),
-                           "--conf", str(args.conf), "--classes", ",".join(map(str, args.classes)),
-                           "--cpus", str(args.cpus), "--result", str(result)]
-                if ov_fp32_dir is not None:
-                    command += ["--ov-fp32-dir", str(ov_fp32_dir)]
-                subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
-                runs[name].append(json.loads(result.read_text(encoding="utf-8")))
-                print(f"repeat {repeat + 1}/{args.repeats}: {name} done", file=sys.stderr)
-    finally:
-        shutil.rmtree(workspace, ignore_errors=True)
-
-    reference = runs["fp32"][0]["boxes"]
+        configurations, runs, sizes = run_configurations(
+            args.video, model=args.model, imgsz=args.imgsz, conf=args.conf, classes=args.classes, cpus=args.cpus,
+            repeats=args.repeats, include_openvino_fp32=args.include_openvino_fp32)
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     report: dict[str, Any] = {
         "input": {"video": args.video.name, "frames": runs["fp32"][0]["frames"], "imgsz": args.imgsz,
                   "conf": args.conf, "classes": args.classes, "model": args.model,
                   "warmupFramesExcluded": WARMUP_FRAMES, "repeats": args.repeats, "cpusPinned": args.cpus},
-        "host": {"processor": platform.processor(), "system": platform.platform()},
-        "results": {},
+        "host": host_info(),
+        "results": summarize(configurations, runs, sizes, args.conf),
     }
-    for name in configurations:
-        repeats = runs[name]
-        first = repeats[0]
-        per_run_mean = [statistics.mean(run["inferenceMs"]) for run in repeats]
-        per_run_p95 = [_percentile(run["inferenceMs"], 0.95) for run in repeats]
-        per_run_fps = [1000 / statistics.mean(run["frameMs"]) for run in repeats]
-        report["results"][name] = {
-            "inferenceMsMean": round(statistics.median(per_run_mean), 2),
-            "inferenceMsP95": round(statistics.median(per_run_p95), 2),
-            "endToEndFps": round(statistics.median(per_run_fps), 2),
-            "endToEndFpsRange": [round(min(per_run_fps), 2), round(max(per_run_fps), 2)],
-            "artifactBytes": sizes[name],
-            "peakRssBytes": max(run["peakRssBytes"] or 0 for run in repeats) or None,
-            "torchThreads": first["torchThreads"], "openvinoThreads": first["openvinoThreads"],
-            "cpuAffinity": first["cpuAffinity"],
-            "detections": first["detections"], "detectionsTotal": sum(first["detections"].values()),
-            "tracking": _tracking(first["boxes"]),
-            "deterministicAcrossRepeats": all(run["boxes"] == first["boxes"] for run in repeats),
-            **({} if name == "fp32" else {"agreement": _agreement(reference, first["boxes"], args.conf)}),
-        }
+    report["gains"] = gains(report["results"])
     text = json.dumps(report, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
