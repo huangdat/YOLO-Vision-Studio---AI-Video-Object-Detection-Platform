@@ -11,9 +11,11 @@ from typing import Any
 
 from app.config.settings import Settings
 from app.core.exceptions import (
-    DetectionEngineError, InvalidVideoSourceError, VideoLimitExceededError, VideoProcessingError,
+    DetectionEngineError, InvalidVideoSourceError, ModelLoadingError, VideoLimitExceededError, VideoProcessingError,
 )
-from app.schemas.detection import DetectionRequest, DetectionStatistics, ProcessingMode
+from app.schemas.detection import (
+    DetectionRequest, DetectionStatistics, InferencePrecision, InferenceRuntime, ProcessingMode,
+)
 from app.schemas.progress import ProgressCallback, ProgressEvent, ProgressStage
 from app.schemas.video import ProcessingResult, VideoMetadata
 from app.services.detection_service import DetectionService
@@ -111,7 +113,15 @@ class VideoProcessor:
         image_size = request.image_size if request.image_size is not None else self.settings.default_image_size
         classes = request.classes if request.classes is not None else DEFAULT_CLASSES.copy()
         device = request.device or self.settings.ai_device
-        loaded = self.model_loader.load(request.model_key, device)
+        requested = request.inference_precision
+        if requested is None:
+            loaded = self.model_loader.load(request.model_key, device)
+        else:  # explicit precision is strict in the loader: INT8 never silently becomes FP32
+            loaded = self.model_loader.load(request.model_key, device, precision=requested.loader_value)
+        effective = InferencePrecision.INT8 if getattr(loaded, "precision", "fp32") == "int8" else InferencePrecision.FP32
+        runtime = InferenceRuntime.OPENVINO if getattr(loaded, "runtime", "PyTorch") == "OpenVINO"             else InferenceRuntime.PYTORCH
+        if requested is not None and effective != requested:
+            raise ModelLoadingError(f"{requested.value} was requested but {effective.value} was loaded.")
         logger.info("Inference for %s uses %s %s on %s", loaded.model_key,
                     str(getattr(loaded, "precision", "fp32")).upper(), getattr(loaded, "runtime", "PyTorch"),
                     getattr(loaded, "predict_device", loaded.device))
@@ -225,6 +235,7 @@ class VideoProcessor:
                 path=output_path, metadata=metadata,
                 processing_mode=request.processing_mode,
                 tracking=accumulator.result() if accumulator is not None else None,
+                effective_precision=effective, inference_runtime=runtime,
                 statistics=DetectionStatistics(
                     model_key=loaded.model_key, device=loaded.device, confidence=confidence,
                     image_size=image_size, classes=classes, total_frames_processed=processed,

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from app.config.logging import logging_config
 from app.config.settings import get_settings
 from app.core.exceptions import DetectionEngineError
-from app.schemas.detection import DetectionRequest, ProcessingMode, SourceType
+from app.schemas.detection import DetectionRequest, InferencePrecision, ProcessingMode, SourceType
 from app.schemas.progress import ProgressEvent
 
 
@@ -38,6 +38,8 @@ def parser() -> argparse.ArgumentParser:
     detect.add_argument("--output", type=Path, help="Optional MP4 path inside AI_OUTPUT_DIR; existing files are rejected")
     detect.add_argument("--tracking", action="store_true",
                         help="Also run ByteTrack so detections keep persistent Track IDs")
+    detect.add_argument("--precision", choices=("fp32", "int8"),
+                        help="Strict inference precision (default: AI_MODEL_PRECISION with its FP32 fallback)")
     prepare = commands.add_parser(
         "prepare-model", help="Alias of 'models prepare': download if needed, then load and verify"
     )
@@ -238,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             output_path=args.output,
             processing_mode=ProcessingMode.DETECTION_TRACKING if args.tracking else ProcessingMode.DETECTION_ONLY,
+            inference_precision=InferencePrecision(args.precision.upper()) if args.precision else None,
         )
         from app.workers.detection_pipeline import DetectionPipeline
 

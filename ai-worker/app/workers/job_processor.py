@@ -26,12 +26,13 @@ from pydantic import ValidationError
 
 from app.config.settings import Settings
 from app.core.exceptions import (
-    ArtifactStorageError, DetectionEngineError, InferenceError, InvalidVideoSourceError, ModelLoadingError,
+    ArtifactStorageError, DetectionEngineError, InferenceError, Int8ModelUnavailableError, InvalidVideoSourceError,
+    ModelLoadingError,
     UnsupportedVideoCodecError, VideoDownloadError, VideoEncodingError, VideoLimitExceededError,
     VideoNormalizationError, VideoProbeError, VideoProcessingError, VideoStreamMissingError,
 )
 from app.schemas.detection import DetectionRequest, SourceType
-from app.schemas.detection import ProcessingMode
+from app.schemas.detection import InferencePrecision, InferenceRuntime, ProcessingMode
 from app.schemas.messaging import (
     DetectionCommand, DetectionEvent, EventError, EventResult, EventTracking, WorkerJobStatus,
 )
@@ -100,6 +101,11 @@ def classify(error: BaseException) -> FailureInfo:
         return FailureInfo("INVALID_SOURCE", sanitize_message(str(error)), False)
     if isinstance(error, VideoLimitExceededError):
         return FailureInfo("VIDEO_LIMIT_EXCEEDED", sanitize_message(str(error)), False)
+    if isinstance(error, Int8ModelUnavailableError):
+        # Permanent until an operator exports the model, so retrying cannot help.
+        return FailureInfo("INT8_MODEL_UNAVAILABLE", sanitize_message(
+            f"{error} Export it on the worker with 'python -m app.cli models quantize', or run the job with FP32."),
+            False)
     if isinstance(error, ModelLoadingError):
         return FailureInfo("MODEL_LOAD_FAILED", sanitize_message(str(error)), True)
     if isinstance(error, InferenceError):
@@ -183,17 +189,19 @@ def _default_pipeline_factory(settings: Settings) -> Any:
     return DetectionPipeline(settings)
 
 
-def _default_model_preloader(settings: Settings, model_key: str, allow_download: bool) -> None:
+def _default_model_preloader(settings: Settings, model_key: str, allow_download: bool,
+                             precision: InferencePrecision | None = None) -> None:
     from app.services.model_loader import ModelLoader
 
-    ModelLoader(settings).load(model_key, settings.ai_device, allow_download=allow_download)
+    ModelLoader(settings).load(model_key, settings.ai_device, allow_download=allow_download,
+                               precision=precision.loader_value if precision is not None else None)
 
 
 class DetectionJobProcessor:
     def __init__(
         self, settings: Settings, store: ArtifactStore, *,
         pipeline_factory: PipelineFactory = _default_pipeline_factory,
-        model_preloader: Callable[[Settings, str, bool], None] = _default_model_preloader,
+        model_preloader: Callable[..., None] = _default_model_preloader,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.settings = settings
@@ -251,7 +259,9 @@ class DetectionJobProcessor:
                                f"'python -m app.cli models prepare --model {spec.model_key}' on the worker.", False)
         # Load before downloading/decoding the video so model problems fail fast; the
         # pipeline then reuses the process-wide model cache entry.
-        self.model_preloader(self.settings, spec.model_key, self.settings.worker_allow_model_download)
+        # Explicit INT8 is checked here too (artifact, runtime, device), before any download.
+        self.model_preloader(self.settings, spec.model_key, self.settings.worker_allow_model_download,
+                             command.inference_precision)
         return None
 
     def _run(self, command: DetectionCommand, sink: EventSink, progress: dict[str, int]) -> None:
@@ -311,6 +321,7 @@ class DetectionJobProcessor:
             source=source, source_type=command.source_type, model_key=command.model_key,
             confidence=float(command.confidence), image_size=command.image_size,
             classes=list(command.classes), processing_mode=command.processing_mode,
+            inference_precision=command.inference_precision,
         )
 
     @staticmethod
@@ -334,6 +345,11 @@ class DetectionJobProcessor:
             tracking = manifest.get("tracking")
             if mode != command.processing_mode:
                 raise ArtifactStorageError("The stored result was produced with a different processing mode.")
+            # Manifests stored before Phase 3 have no precision fields.
+            effective = manifest.get("effectivePrecision")
+            runtime = manifest.get("inferenceRuntime")
+            if command.inference_precision is not None and effective != command.inference_precision.value:
+                raise ArtifactStorageError("The stored result was produced with a different inference precision.")
             return DetectionEvent(
                 job_id=command.job_id, status=WorkerJobStatus.COMPLETED, progress=100,
                 processed_frames=statistics["totalFramesProcessed"],
@@ -351,6 +367,8 @@ class DetectionJobProcessor:
                         tracked_detections=tracking["trackedDetections"],
                         unique_track_ids_by_class=tracking["uniqueTrackIdsByClass"],
                     ) if tracking is not None else None,
+                    effective_precision=InferencePrecision(effective) if effective is not None else None,
+                    inference_runtime=InferenceRuntime(runtime) if runtime is not None else None,
                 ),
             )
         except (KeyError, TypeError, ValueError, ValidationError) as error:

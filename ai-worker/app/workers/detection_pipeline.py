@@ -140,6 +140,8 @@ class DetectionPipeline:
                         processing_time_ms=duration_ms,
                         processing_mode=processed.processing_mode,
                         tracking=processed.tracking,
+                        effective_precision=processed.effective_precision,
+                        inference_runtime=processed.inference_runtime,
                     )
                     (stage_dir / metadata_path.name).write_text(
                         result.model_dump_json(by_alias=True, indent=2), encoding="utf-8"

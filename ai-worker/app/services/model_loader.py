@@ -13,7 +13,7 @@ from threading import Lock, RLock
 from typing import Any, ClassVar
 
 from app.config.settings import Settings
-from app.core.exceptions import ModelLoadingError
+from app.core.exceptions import Int8ModelUnavailableError, ModelLoadingError
 from app.services.model_registry import (
     DEFAULT_MODEL_KEY, MODEL_SPECS, ModelSpec, file_fingerprint, get_model_spec, verification_record_path,
 )
@@ -193,7 +193,7 @@ class ModelLoader:
                 return status
             reason = f"{status.status.value}: {status.reason}"
         if strict:
-            raise ModelLoadingError(f"INT8 model for {spec.model_key} is unavailable ({reason}).")
+            raise Int8ModelUnavailableError(f"INT8 model for {spec.model_key} is unavailable ({reason}).")
         logger.warning("Using the FP32 model for %s; INT8 is unavailable (%s)", spec.model_key, reason)
         return None
 

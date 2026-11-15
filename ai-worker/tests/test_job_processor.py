@@ -7,9 +7,10 @@ import pytest
 
 from app.config.settings import Settings
 from app.core.exceptions import (
+    Int8ModelUnavailableError,
     ArtifactStorageError, InvalidVideoSourceError, ModelLoadingError, VideoDownloadError, VideoEncodingError,
 )
-from app.schemas.detection import ProcessingMode
+from app.schemas.detection import InferencePrecision, InferenceRuntime, ProcessingMode
 from app.schemas.messaging import DetectionCommand, DetectionEvent, WorkerJobStatus
 from app.schemas.progress import ProgressEvent, ProgressStage
 from app.services.artifact_storage import ArtifactKeys
@@ -66,10 +67,12 @@ class FakeStore:
 
 
 class FakePipeline:
-    def __init__(self, settings, error=None, model_key=None):
+    def __init__(self, settings, error=None, model_key=None, effective_precision="requested"):
         self.settings = settings
         self.error = error
         self.model_key = model_key
+        # "requested" echoes the request like the real pipeline does when loading succeeds.
+        self.effective_precision = effective_precision
         self.requests = []
 
     def process_video(self, request, on_progress=None):
@@ -85,6 +88,8 @@ class FakePipeline:
         video = out / "detected.mp4"
         video.write_bytes(b"encoded video")
         tracking = request.processing_mode == ProcessingMode.DETECTION_TRACKING
+        effective = (request.inference_precision.value if request.inference_precision else None)             if self.effective_precision == "requested" else self.effective_precision
+        runtime = {"INT8": "OPENVINO", "FP32": "PYTORCH"}.get(effective)
         return SimpleNamespace(
             model_key=self.model_key or request.model_key,
             processing_mode=request.processing_mode,
@@ -99,6 +104,7 @@ class FakePipeline:
                 "tracking": {"tracker": "bytetrack", "uniqueTrackIds": 2, "maxActiveTracks": 2,
                              "trackedDetections": 60, "uniqueTrackIdsByClass": {"bus": 2},
                              "tracks": [{"trackId": 1}, {"trackId": 2}]} if tracking else None,
+                **({"effectivePrecision": effective, "inferenceRuntime": runtime} if effective else {}),
             }),
         )
 
@@ -122,10 +128,12 @@ def environment(tmp_path):
     environment_options = {}
     processor = DetectionJobProcessor(
         settings, store, pipeline_factory=factory,
-        model_preloader=lambda s, key, allow: preloads.append((key, allow)),
+        model_preloader=lambda s, key, allow, precision=None: (preloads.append((key, allow)),
+                                                               precisions.append(precision)),
     )
+    precisions = []
     return SimpleNamespace(settings=settings, store=store, pipelines=pipelines, preloads=preloads,
-                           processor=processor, options=environment_options)
+                           processor=processor, options=environment_options, precisions=precisions)
 
 
 def test_successful_job_publishes_progress_uploading_and_completion_then_acks(environment):
@@ -408,3 +416,68 @@ def test_throttle_publishes_on_stage_change_step_or_interval():
     assert throttle.should_publish(WorkerJobStatus.ENCODING, 21)
     now[0] = 30
     assert not throttle.should_publish(WorkerJobStatus.ENCODING, 21)
+
+
+# --- Per-job inference precision (Phase 3) -------------------------------------------------------
+
+def test_int8_command_preloads_int8_and_reports_what_ran(environment):
+    sink = RecordingSink()
+
+    settlement = environment.processor.handle(command_bytes(inferencePrecision="INT8"), 1, sink)
+
+    assert settlement.disposition == Disposition.ACK
+    assert environment.precisions == [InferencePrecision.INT8]
+    assert environment.pipelines[0].requests[0].inference_precision == InferencePrecision.INT8
+    result = sink.events[-1].result
+    assert (result.effective_precision, result.inference_runtime) == (InferencePrecision.INT8, InferenceRuntime.OPENVINO)
+    assert json.loads(sink.events[-1].model_dump_json(by_alias=True))["result"]["effectivePrecision"] == "INT8"
+
+
+def test_explicit_fp32_and_legacy_commands_keep_their_precision(environment):
+    fp32_sink, legacy_sink = RecordingSink(), RecordingSink()
+
+    environment.processor.handle(command_bytes(inferencePrecision="FP32"), 1, fp32_sink)
+    environment.processor.handle(command_bytes(jobId=str(uuid4())), 1, legacy_sink)
+
+    assert environment.precisions == [InferencePrecision.FP32, None]  # legacy: worker default applies
+    assert environment.pipelines[1].requests[0].inference_precision is None
+    assert fp32_sink.events[-1].result.effective_precision == InferencePrecision.FP32
+    assert legacy_sink.events[-1].result.effective_precision is None  # fake legacy manifest has no field
+
+
+def test_unavailable_int8_fails_permanently_with_an_actionable_message_before_any_work(environment):
+    def unavailable(settings, key, allow, precision=None):
+        raise Int8ModelUnavailableError("INT8 model for yolo11n is unavailable (NOT_EXPORTED: No INT8 artifact).")
+
+    environment.processor.model_preloader = unavailable
+    sink = RecordingSink()
+
+    settlement = environment.processor.handle(command_bytes(inferencePrecision="INT8"), 1, sink)
+
+    assert settlement.disposition == Disposition.ACK and settlement.error_code == "INT8_MODEL_UNAVAILABLE"
+    failure = sink.events[-1]
+    assert failure.status.value == "FAILED" and failure.error.code == "INT8_MODEL_UNAVAILABLE"
+    assert failure.error.retryable is False
+    assert "NOT_EXPORTED" in failure.error.message and "models quantize" in failure.error.message
+    assert "FP32" in failure.error.message
+    assert environment.pipelines == []  # nothing downloaded or processed
+
+
+def test_a_result_with_a_different_precision_is_never_reported_as_the_requested_one(environment):
+    environment.options["effective_precision"] = "FP32"  # e.g. a stale stored result
+    sink = RecordingSink()
+
+    settlement = environment.processor.handle(command_bytes(inferencePrecision="INT8"), 1, sink)
+
+    assert "COMPLETED" not in sink.statuses()
+    assert settlement.disposition != Disposition.ACK and settlement.error_code == "STORAGE_FAILED"
+    assert all(event.result is None for event in sink.events)  # nothing claims an INT8 result
+
+
+@pytest.mark.parametrize("value", ["int8", "INT4", "", 8])
+def test_commands_reject_unknown_precisions(environment, value):
+    sink = RecordingSink()
+
+    settlement = environment.processor.handle(command_bytes(inferencePrecision=value), 1, sink)
+
+    assert settlement.error_code == "INVALID_COMMAND" and environment.pipelines == []

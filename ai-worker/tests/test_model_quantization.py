@@ -433,3 +433,23 @@ def test_real_int8_model_runs_through_the_bytetrack_pipeline(monkeypatch: pytest
     assert len(frames) > 0
     assert all(frame.tracked is not None and frame.image is not None for frame in frames)
     assert any(box.track_id is not None for frame in frames for box in frame.boxes)
+
+
+def test_concurrent_jobs_with_different_precisions_never_share_a_model(tmp_path: Path, loader_environment) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    settings = settings_for(tmp_path)
+    write_artifact(settings, source=write_weights(settings))
+    loader = ModelLoader(settings)
+    requested = ["int8", "fp32"] * 8
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        loaded = list(pool.map(lambda precision: loader.load("yolo11n", "cpu", record_verification=False,
+                                                           precision=precision), requested))
+
+    int8 = {id(model) for model, precision in zip(loaded, requested) if precision == "int8"}
+    fp32 = {id(model) for model, precision in zip(loaded, requested) if precision == "fp32"}
+    assert len(int8) == len(fp32) == 1 and int8 != fp32  # one cached instance per precision
+    by_precision = {model.precision: model for model in loaded}
+    assert by_precision["int8"].lock is not by_precision["fp32"].lock  # inference locks are separate too
+    assert by_precision["int8"].predict_device == OPENVINO_CPU_DEVICE and by_precision["fp32"].predict_device == "cpu"

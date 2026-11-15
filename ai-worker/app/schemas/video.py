@@ -7,7 +7,9 @@ from uuid import UUID
 from pydantic import Field
 
 from app.schemas.base import EngineSchema
-from app.schemas.detection import DetectionStatistics, ProcessingMode, SourceType
+from app.schemas.detection import (
+    DetectionStatistics, InferencePrecision, InferenceRuntime, ProcessingMode, SourceType,
+)
 from app.schemas.tracking import TrackingStatistics
 
 
@@ -27,6 +29,8 @@ class ProcessingResult(EngineSchema):
     statistics: DetectionStatistics
     processing_mode: ProcessingMode = ProcessingMode.DETECTION_ONLY
     tracking: TrackingStatistics | None = None
+    effective_precision: InferencePrecision | None = None
+    inference_runtime: InferenceRuntime | None = None
 
 
 class InputVideoMetadata(VideoMetadata):
@@ -54,3 +58,6 @@ class DetectionResult(EngineSchema):
     processing_mode: ProcessingMode = ProcessingMode.DETECTION_ONLY
     # Present only in tracking mode; legacy result files have neither field.
     tracking: TrackingStatistics | None = None
+    # What actually ran (never the request echoed back); absent in results written before Phase 3.
+    effective_precision: InferencePrecision | None = None
+    inference_runtime: InferenceRuntime | None = None

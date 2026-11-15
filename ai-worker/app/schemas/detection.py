@@ -24,6 +24,23 @@ class ProcessingMode(StrEnum):
     DETECTION_TRACKING = "DETECTION_TRACKING"
 
 
+class InferencePrecision(StrEnum):
+    """Per-job inference precision. FP32 runs the PyTorch checkpoint; INT8 runs the validated
+    OpenVINO INT8 artifact exported with `models quantize` (CPU only, experimental)."""
+
+    FP32 = "FP32"
+    INT8 = "INT8"
+
+    @property
+    def loader_value(self) -> str:
+        return self.value.lower()
+
+
+class InferenceRuntime(StrEnum):
+    PYTORCH = "PYTORCH"
+    OPENVINO = "OPENVINO"
+
+
 class DetectionRequest(EngineSchema):
     source: str = Field(min_length=1, max_length=8192)
     source_type: SourceType
@@ -34,6 +51,9 @@ class DetectionRequest(EngineSchema):
     device: str | None = Field(default=None, pattern=r"^(auto|cpu|cuda:0)$")
     output_path: Path | None = None
     processing_mode: ProcessingMode = ProcessingMode.DETECTION_ONLY
+    # None keeps the worker's configured default (AI_MODEL_PRECISION and its FP32 fallback). An
+    # explicit value is strict: INT8 never silently runs as FP32.
+    inference_precision: InferencePrecision | None = None
 
     @field_validator("source")
     @classmethod
