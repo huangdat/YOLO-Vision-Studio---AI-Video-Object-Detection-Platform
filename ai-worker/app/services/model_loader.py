@@ -193,7 +193,7 @@ class ModelLoader:
                 return status
             reason = f"{status.status.value}: {status.reason}"
         if strict:
-            raise Int8ModelUnavailableError(f"INT8 model for {spec.model_key} is unavailable ({reason}).")
+            raise Int8ModelUnavailableError(f"INT8 model for {spec.model_key} is unavailable ({reason.rstrip('.')}).")
         logger.warning("Using the FP32 model for %s; INT8 is unavailable (%s)", spec.model_key, reason)
         return None
 
