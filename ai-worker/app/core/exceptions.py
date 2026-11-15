@@ -51,3 +51,7 @@ class VideoEncodingError(DetectionEngineError):
 
 class ArtifactStorageError(DetectionEngineError):
     """Completed artifacts could not be stored durably or read back."""
+
+
+class QuantizationError(DetectionEngineError):
+    """An INT8 model could not be exported, calibrated, or validated."""

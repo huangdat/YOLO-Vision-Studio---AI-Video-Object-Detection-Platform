@@ -55,6 +55,18 @@ class Settings(BaseSettings):
     processing_timeout_seconds: float = Field(
         default=1800, gt=0, allow_inf_nan=False, validation_alias="AI_PROCESSING_TIMEOUT_SECONDS"
     )
+    # Quantization PoC. fp32 (default) keeps the PyTorch checkpoints exactly as before. int8 loads
+    # an OpenVINO INT8 artifact exported with `python -m app.cli models quantize` (CPU only).
+    model_precision: Literal["fp32", "int8"] = Field(default="fp32", validation_alias="AI_MODEL_PRECISION")
+    # When int8 is configured but a model has no valid INT8 artifact (or the device is CUDA), load the
+    # FP32 checkpoint and log a warning instead of failing the job.
+    int8_fallback_to_fp32: bool = Field(default=True, validation_alias="AI_INT8_FALLBACK_TO_FP32")
+    # Separate artifact directory for exported INT8 models; defaults to <AI_MODEL_CACHE_DIR>/quantized.
+    quantized_model_dir: Path | None = Field(default=None, validation_alias="AI_QUANTIZED_MODEL_DIR")
+
+    @property
+    def quantized_models_path(self) -> Path:
+        return self.quantized_model_dir if self.quantized_model_dir is not None else self.model_cache_dir / "quantized"
 
     # RabbitMQ: names are shared with the Spring Boot backend so both declare identical topology.
     rabbitmq_host: str = Field(default="localhost", min_length=1, validation_alias="RABBITMQ_HOST")

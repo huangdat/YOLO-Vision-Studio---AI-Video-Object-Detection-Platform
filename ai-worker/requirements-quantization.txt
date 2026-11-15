@@ -1,0 +1,6 @@
+# Optional OpenVINO INT8 quantization PoC (export with `python -m app.cli models quantize`, then
+# AI_MODEL_PRECISION=int8). Install after requirements-ai.txt. Not part of the Docker images yet.
+# Versions verified with ultralytics-opencv-headless 8.4.207 and torch 2.13.0 on CPU.
+-r requirements-ai.txt
+openvino==2026.4.1
+nncf==3.4.0
