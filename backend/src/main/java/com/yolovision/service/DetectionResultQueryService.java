@@ -51,7 +51,8 @@ public class DetectionResultQueryService {
                 job.getProcessingMode(), tracking == null ? null : new DetectionResultMetadataResponse.Tracking(
                         tracking.tracker(), tracking.uniqueTrackIds(), tracking.maxActiveTracks(),
                         tracking.trackedDetections(), tracking.uniqueTrackIdsByClass(),
-                        DetectionResultMetadataResponse.TRACK_IDS));
+                        DetectionResultMetadataResponse.TRACK_IDS),
+                result.getEffectivePrecision(), result.getInferenceRuntime());
     }
 
     private static boolean hasText(String value) {

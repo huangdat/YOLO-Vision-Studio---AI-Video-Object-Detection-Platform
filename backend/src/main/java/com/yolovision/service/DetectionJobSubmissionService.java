@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yolovision.dto.DetectionJobSubmissionRequest;
 import com.yolovision.dto.messaging.DetectionCommandMessage;
 import com.yolovision.entity.DetectionJob;
+import com.yolovision.entity.InferencePrecision;
 import com.yolovision.entity.DetectionJobOutboxMessage;
 import com.yolovision.entity.DetectionSourceType;
 import com.yolovision.entity.ModelConfig;
@@ -87,12 +88,16 @@ public class DetectionJobSubmissionService {
         DetectionJob job = new DetectionJob(model, source, confidence, imageSize, classes);
         job.setSourceType(request.sourceType());
         job.setProcessingMode(mode);
+        InferencePrecision precision = request.inferencePrecision() == null
+                ? InferencePrecision.FP32 : request.inferencePrecision();
+        job.setInferencePrecision(precision);
         jobs.saveAndFlush(job);
 
         // The mode travels in the same outbox command; the worker performs the tracking.
         DetectionCommandMessage command = new DetectionCommandMessage(
                 DetectionCommandMessage.SCHEMA_VERSION, UUID.randomUUID(), job.getId(), model.getModelKey(),
-                job.getSourceType(), job.getVideoUrl(), confidence, imageSize, classes, job.getCreatedAt(), mode);
+                job.getSourceType(), job.getVideoUrl(), confidence, imageSize, classes, job.getCreatedAt(), mode,
+                precision);
         outbox.save(new DetectionJobOutboxMessage(command.messageId(), job.getId(),
                 DetectionCommandMessage.MESSAGE_TYPE, serialize(command)));
         LOG.info("Detection job {} created with model {} (source type {}, {}); command {} queued in outbox",

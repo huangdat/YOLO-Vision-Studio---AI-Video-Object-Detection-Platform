@@ -106,8 +106,12 @@ class DetectionJobSubmissionServiceTest {
         outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow()
                 .getPayload().fieldNames().forEachRemaining(fields::add);
 
+        // inferencePrecision (Phase 3) is sent for every new job so the worker runs exactly the requested
+        // precision; processingMode is still omitted for Detection Only.
         assertThat(fields).containsExactlyInAnyOrder("schemaVersion", "messageId", "jobId", "modelKey",
-                "sourceType", "source", "confidence", "imageSize", "classes", "createdAt");
+                "sourceType", "source", "confidence", "imageSize", "classes", "createdAt", "inferencePrecision");
+        assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow()
+                .getPayload().get("inferencePrecision").asText()).isEqualTo("FP32");
     }
 
     @Test

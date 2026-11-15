@@ -8,6 +8,7 @@ import com.yolovision.dto.DetectionJobSubmissionRequest;
 import com.yolovision.dto.DetectionJobSummaryResponse;
 import com.yolovision.dto.PageResponse;
 import com.yolovision.entity.DetectionJob;
+import com.yolovision.entity.InferencePrecision;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionSourceType;
 import com.yolovision.entity.ProcessingMode;
@@ -56,11 +57,12 @@ public class DetectionJobQueryService {
             throw InvalidDetectionJobException.of("request", "a JSON request body is required");
         }
         ProcessingMode mode = parseProcessingMode(request.processingMode());
+        InferencePrecision precision = parseInferencePrecision(request.inferencePrecision());
         UUID jobId;
         try {
             jobId = submissions.submit(new DetectionJobSubmissionRequest(request.modelKey(),
                     DetectionSourceType.YOUTUBE_URL, request.videoUrl(), request.confidence(), request.imageSize(),
-                    request.classes(), mode));
+                    request.classes(), mode, precision));
         } catch (DetectionModelUnavailableException exception) {
             throw exception;
         } catch (InvalidDetectionJobException exception) {
@@ -68,7 +70,20 @@ public class DetectionJobQueryService {
         }
         DetectionJob job = jobs.findWithModelById(jobId).orElseThrow(DetectionJobNotFoundException::new);
         return new DetectionJobAcceptedResponse(job.getId(), job.getStatus(), job.getProgress(),
-                job.getModel().getModelKey(), "Detection job accepted", job.getProcessingMode());
+                job.getModel().getModelKey(), "Detection job accepted", job.getProcessingMode(),
+                job.getInferencePrecision());
+    }
+
+    /** Absent means FP32 (every client written before precision existed). Case-insensitive. */
+    static InferencePrecision parseInferencePrecision(String value) {
+        if (value == null) {
+            return InferencePrecision.FP32;
+        }
+        InferencePrecision precision = InferencePrecision.parse(value);
+        if (precision == null) {
+            throw InvalidDetectionJobException.of("inferencePrecision", "must be FP32 or INT8");
+        }
+        return precision;
     }
 
     /** Absent means Detection Only (every client written before tracking existed). */
@@ -105,13 +120,14 @@ public class DetectionJobQueryService {
                 job.getModel().getVersion(), job.getSourceType(), youtube ? job.getVideoUrl() : null,
                 job.getStatus(), job.getProgress(), job.getConfidence(), job.getImageSize(),
                 job.getSelectedClasses(), job.getCreatedAt(), job.getStartedAt(), job.getCompletedAt(),
-                job.getUpdatedAt(), job.getErrorCode(), job.getErrorMessage(), job.getProcessingMode());
+                job.getUpdatedAt(), job.getErrorCode(), job.getErrorMessage(), job.getProcessingMode(),
+                job.getInferencePrecision());
     }
 
     static DetectionJobSummaryResponse toSummary(DetectionJob job) {
         return new DetectionJobSummaryResponse(job.getId(), job.getModel().getModelKey(), job.getStatus(),
                 job.getProgress(), job.getCreatedAt(), job.getCompletedAt(), job.getErrorCode(),
-                job.getProcessingMode());
+                job.getProcessingMode(), job.getInferencePrecision());
     }
 
     /** Short user-facing description of a status; never claims progress that is not stored. */

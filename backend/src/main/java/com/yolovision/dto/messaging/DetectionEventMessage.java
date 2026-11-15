@@ -1,6 +1,8 @@
 package com.yolovision.dto.messaging;
 
 import com.yolovision.entity.ProcessingMode;
+import com.yolovision.entity.InferencePrecision;
+import com.yolovision.entity.InferenceRuntime;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -38,12 +40,21 @@ public record DetectionEventMessage(
             @NotNull @PositiveOrZero Long processingTimeMs,
             @NotNull Map<@NotBlank @Size(max = 128) String, @NotNull @PositiveOrZero Long> detectionSummary,
             ProcessingMode processingMode,
-            @Valid Tracking tracking) {
+            @Valid Tracking tracking,
+            InferencePrecision effectivePrecision,
+            InferenceRuntime inferenceRuntime) {
 
         /** Completion of a detection-only job (no tracking fields), as sent by every worker version. */
         public Result(String outputVideoKey, String resultJsonKey, Integer totalFrames, Long processingTimeMs,
                 Map<String, Long> detectionSummary) {
             this(outputVideoKey, resultJsonKey, totalFrames, processingTimeMs, detectionSummary, null, null);
+        }
+
+        /** Completion from a worker that does not report precision (before Phase 3). */
+        public Result(String outputVideoKey, String resultJsonKey, Integer totalFrames, Long processingTimeMs,
+                Map<String, Long> detectionSummary, ProcessingMode processingMode, Tracking tracking) {
+            this(outputVideoKey, resultJsonKey, totalFrames, processingTimeMs, detectionSummary, processingMode,
+                    tracking, null, null);
         }
     }
 

@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.yolovision.dto.messaging.DetectionEventMessage;
 import com.yolovision.dto.messaging.DetectionEventStatus;
 import com.yolovision.entity.DetectionJob;
+import com.yolovision.entity.InferenceRuntime;
+import com.yolovision.entity.InferencePrecision;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.ModelConfig;
@@ -182,6 +184,48 @@ class DetectionJobLifecycleServiceTest {
     }
 
     @Test
+    void int8CompletionStoresTheEffectivePrecisionAndRuntime() {
+        DetectionJob int8 = job();
+        int8.setInferencePrecision(InferencePrecision.INT8);
+        jobs.saveAndFlush(int8);
+
+        assertThat(lifecycle.apply(completedWith(InferencePrecision.INT8, InferenceRuntime.OPENVINO)))
+                .isEqualTo(Outcome.APPLIED);
+        entityManager.flush();
+        entityManager.clear();
+
+        DetectionResult result = results.findByJob_Id(jobId).orElseThrow();
+        assertThat(result.getEffectivePrecision()).isEqualTo(InferencePrecision.INT8);
+        assertThat(result.getInferenceRuntime()).isEqualTo(InferenceRuntime.OPENVINO);
+    }
+
+    @Test
+    void completionWithADifferentPrecisionFailsTheJobWithoutAResult() {
+        DetectionJob int8 = job();
+        int8.setInferencePrecision(InferencePrecision.INT8);
+        jobs.saveAndFlush(int8);
+
+        assertThat(lifecycle.apply(completedWith(InferencePrecision.FP32, InferenceRuntime.PYTORCH)))
+                .isEqualTo(Outcome.REJECTED);
+
+        assertThat(job().getStatus()).isEqualTo(DetectionJobStatus.FAILED);
+        assertThat(job().getErrorCode()).isEqualTo("PRECISION_MISMATCH");
+        assertThat(results.existsByJob_Id(jobId)).isFalse();
+    }
+
+    @Test
+    void completionFromAWorkerThatDoesNotReportPrecisionStoresNull() {
+        assertThat(lifecycle.apply(completed("yolo11n"))).isEqualTo(Outcome.APPLIED);
+        entityManager.flush();
+        entityManager.clear();
+
+        DetectionResult result = results.findByJob_Id(jobId).orElseThrow();
+        assertThat(result.getEffectivePrecision()).isNull();
+        assertThat(result.getInferenceRuntime()).isNull();
+        assertThat(job().getInferencePrecision()).isEqualTo(InferencePrecision.FP32);
+    }
+
+    @Test
     void duplicateCompletionDoesNotCreateASecondResult() {
         lifecycle.apply(completed("yolo11n"));
 
@@ -308,6 +352,13 @@ class DetectionJobLifecycleServiceTest {
                 "Completed", Instant.now(), modelKey, new DetectionEventMessage.Result(
                         "detections/" + jobId + "/detected.mp4", "detections/" + jobId + "/result.json",
                         36, 7058L, Map.of("bus", 36L, "car", 4L)), null);
+    }
+
+    private DetectionEventMessage completedWith(InferencePrecision precision, InferenceRuntime runtime) {
+        return new DetectionEventMessage(1, UUID.randomUUID(), jobId, DetectionEventStatus.COMPLETED, 100, 36, 36,
+                "Completed", Instant.now(), "yolo11n", new DetectionEventMessage.Result(
+                        "detections/" + jobId + "/detected.mp4", "detections/" + jobId + "/result.json",
+                        36, 7058L, Map.of("bus", 36L), null, null, precision, runtime), null);
     }
 
     private DetectionEventMessage completedWithTracking() {

@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.yolovision.dto.messaging.DetectionEventMessage;
 import com.yolovision.dto.messaging.DetectionEventStatus;
+import com.yolovision.entity.InferencePrecision;
+import com.yolovision.entity.InferenceRuntime;
 import com.yolovision.entity.ProcessingMode;
 import com.yolovision.exception.UnknownDetectionJobException;
 import com.yolovision.service.DetectionJobLifecycleService;
@@ -96,6 +98,25 @@ class DetectionJobEventConsumerTest {
         assertThat(result.processingMode()).isEqualTo(ProcessingMode.DETECTION_TRACKING);
         assertThat(result.tracking().uniqueTrackIds()).isEqualTo(4L);
         assertThat(result.tracking().uniqueTrackIdsByClass()).containsEntry("car", 4L);
+    }
+
+    @Test
+    void precisionReportedByThePythonWorkerIsDeserialised() {
+        when(lifecycle.apply(any())).thenReturn(DetectionJobLifecycleService.Outcome.APPLIED);
+
+        consumer.onEvent(message("""
+                {"schemaVersion":1,"eventId":"%s","jobId":"%s","status":"COMPLETED","progress":100,
+                 "timestamp":"2026-11-08T00:00:00Z","modelKey":"yolo11n",
+                 "result":{"outputVideoKey":"detections/%s/detected.mp4","resultJsonKey":"detections/%s/result.json",
+                 "totalFrames":150,"processingTimeMs":45000,"detectionSummary":{"car":120},
+                 "effectivePrecision":"INT8","inferenceRuntime":"OPENVINO"}}"""
+                .formatted(EVENT, JOB, JOB, JOB)));
+
+        ArgumentCaptor<DetectionEventMessage> captor = ArgumentCaptor.forClass(DetectionEventMessage.class);
+        verify(lifecycle).apply(captor.capture());
+        DetectionEventMessage.Result result = captor.getValue().result();
+        assertThat(result.effectivePrecision()).isEqualTo(InferencePrecision.INT8);
+        assertThat(result.inferenceRuntime()).isEqualTo(InferenceRuntime.OPENVINO);
     }
 
     @ParameterizedTest

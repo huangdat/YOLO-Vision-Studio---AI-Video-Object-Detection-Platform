@@ -2,6 +2,8 @@ package com.yolovision.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
@@ -65,6 +67,15 @@ public class DetectionResult {
     @Column(name = "tracking_summary", columnDefinition = "jsonb")
     private TrackingSummary trackingSummary;
 
+    /** Precision and runtime the worker actually used; null for results stored before it reported them. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "effective_precision", length = 8)
+    private InferencePrecision effectivePrecision;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inference_runtime", length = 16)
+    private InferenceRuntime inferenceRuntime;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -92,6 +103,22 @@ public class DetectionResult {
 
     public void setTrackingSummary(TrackingSummary trackingSummary) {
         this.trackingSummary = trackingSummary;
+    }
+
+    public InferencePrecision getEffectivePrecision() {
+        return effectivePrecision;
+    }
+
+    public void setEffectivePrecision(InferencePrecision effectivePrecision) {
+        this.effectivePrecision = effectivePrecision;
+    }
+
+    public InferenceRuntime getInferenceRuntime() {
+        return inferenceRuntime;
+    }
+
+    public void setInferenceRuntime(InferenceRuntime inferenceRuntime) {
+        this.inferenceRuntime = inferenceRuntime;
     }
 
     public DetectionJob getJob() {
