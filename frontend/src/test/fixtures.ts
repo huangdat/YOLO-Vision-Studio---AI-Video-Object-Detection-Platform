@@ -35,6 +35,7 @@ export function summary(overrides: Partial<DetectionJobSummary> = {}): Detection
     createdAt: "2026-11-08T11:13:21Z",
     completedAt: "2026-11-08T11:13:38Z",
     errorCode: null,
+    processingMode: "DETECTION_ONLY",
     ...overrides,
   };
 }
@@ -68,6 +69,7 @@ export function job(overrides: Partial<DetectionJob> = {}): DetectionJob {
     updatedAt: "2026-11-08T11:13:30Z",
     errorCode: null,
     errorMessage: null,
+    processingMode: "DETECTION_ONLY",
     ...overrides,
   };
 }
@@ -87,6 +89,8 @@ export function result(overrides: Partial<DetectionResultMetadata> = {}): Detect
     resultMetadataAvailable: true,
     createdAt: "2026-11-08T11:13:38Z",
     completedAt: "2026-11-08T11:13:38Z",
+    processingMode: "DETECTION_ONLY",
+    tracking: null,
     ...overrides,
   };
 }

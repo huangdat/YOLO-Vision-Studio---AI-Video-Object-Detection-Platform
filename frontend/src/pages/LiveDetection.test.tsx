@@ -99,7 +99,7 @@ beforeEach(() => {
   captureFrame = vi.fn(async (): Promise<CapturedFrame> => ({ buffer: new ArrayBuffer(16), width: 640, height: 480 }));
   context = {
     setTransform: vi.fn(), clearRect: vi.fn(), strokeRect: vi.fn(), fillRect: vi.fn(), fillText: vi.fn(),
-    measureText: vi.fn(() => ({ width: 40 })),
+    measureText: vi.fn(() => ({ width: 40 })), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(),
   };
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
@@ -124,15 +124,16 @@ const renderLive = () => renderAt("/live", "/live", <LiveDetection dependencies=
 const startButton = () => screen.getByRole("button", { name: /Start Live Detection|Starting/ });
 const stopButton = () => screen.getByRole("button", { name: "Stop" });
 
-async function startSession() {
+async function startSession(tracking = false) {
   const view = renderLive();
   await waitFor(() => expect((startButton() as HTMLButtonElement).disabled).toBe(false));
+  if (tracking) fireEvent.click(screen.getByRole("switch", { name: /Object tracking/ }));
   fireEvent.click(startButton());
   await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
   const socket = FakeSocket.instances[0];
   act(() => socket.open());
   act(() => socket.serverSends({ type: "ready", sessionId: "s-1", modelKey: "yolo11n", maxFps: 5,
-    maxFrameBytes: 524288, maxInFlight: 1 }));
+    maxFrameBytes: 524288, maxInFlight: 1, ...(tracking ? { tracking: true, tracker: "bytetrack" } : {}) }));
   await waitFor(() => expect(socket.frames()).toHaveLength(1));
   return { view, socket };
 }
@@ -208,7 +209,7 @@ describe("Live Detection page", () => {
     expect(socket.url).toBe(`ws://${window.location.host}/api/v1/live/ws`);
     act(() => socket.open());
     expect(socket.texts()[0]).toEqual({ type: "start", version: 1, modelKey: "yolo11n", confidence: 0.25,
-      imageSize: 416, classes: [1, 2, 3, 5, 7] });
+      imageSize: 416, classes: [1, 2, 3, 5, 7], tracking: false });
     expect(screen.getByText(/Connecting to the detector/)).toBeTruthy();
   });
 
@@ -298,6 +299,55 @@ describe("Live Detection page", () => {
     expect(track.stop).toHaveBeenCalled();
     expect(socket.closed).not.toBeNull();
     expect(screen.getByText("Camera off")).toBeTruthy();
+  });
+
+  it("asks for tracking only when the toggle is on and draws the server's track IDs", async () => {
+    const { socket } = await startSession(true);
+    expect(socket.texts()[0]).toMatchObject({ type: "start", tracking: true });
+
+    act(() => socket.serverSends({ ...detections(1, 0), tracking: true, activeTracks: 1, detections: [
+      { classId: 0, label: "person", confidence: 0.91, box: [100, 80, 200, 300], trackId: 3 },
+      { classId: 2, label: "car", confidence: 0.87, box: [300, 85, 410, 260], trackId: null },
+    ] }));
+
+    expect(context.fillText).toHaveBeenCalledWith("Person #3 · 91%", expect.any(Number), expect.any(Number));
+    // A detection without a confirmed track gets no invented ID.
+    expect(context.fillText).toHaveBeenCalledWith("Car 87%", expect.any(Number), expect.any(Number));
+    await waitFor(() => expect(screen.getByText("Active tracks").nextElementSibling?.textContent).toBe("1"));
+  });
+
+  it("draws a short trail once a track has been seen in several frames", async () => {
+    const { socket } = await startSession(true);
+    const tracked = (frameId: number, x: number) => ({ ...detections(frameId, 0), tracking: true, activeTracks: 1,
+      detections: [{ classId: 0, label: "person", confidence: 0.9, box: [x, 80, x + 100, 300], trackId: 3 }] });
+
+    act(() => socket.serverSends(tracked(1, 100)));
+    expect(context.stroke).not.toHaveBeenCalled();
+    await waitFor(() => expect(socket.frames()).toEqual([1, 2]));
+    act(() => socket.serverSends(tracked(2, 120)));
+    expect(context.stroke).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no tracking metrics in Detection Only sessions", async () => {
+    const { socket } = await startSession();
+    act(() => socket.serverSends(detections(1)));
+
+    expect(screen.queryByText("Active tracks")).toBeNull();
+    expect(context.stroke).not.toHaveBeenCalled();
+  });
+
+  it("locks the tracking choice while a session runs and starts fresh sessions after stopping", async () => {
+    await startSession(true);
+    const toggle = screen.getByRole("switch", { name: /Object tracking/ }) as HTMLInputElement;
+    expect(toggle.disabled).toBe(true);
+
+    fireEvent.click(stopButton());
+    expect(toggle.disabled).toBe(false);
+    expect(screen.queryByText("Active tracks")).toBeNull();
+    fireEvent.click(startButton());
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(2));
+    act(() => FakeSocket.instances[1].open());
+    expect(FakeSocket.instances[1].texts()[0]).toMatchObject({ tracking: true });
   });
 
   it("stops cleanly: tells the server, closes the socket, and releases the camera", async () => {

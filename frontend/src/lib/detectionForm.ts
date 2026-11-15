@@ -16,6 +16,8 @@ export interface DetectionFormState {
   confidence: string;
   imageSize: number;
   classes: number[];
+  /** Object tracking (ByteTrack); off by default. */
+  tracking: boolean;
 }
 
 export type FormField = "videoUrl" | "modelKey" | "confidence" | "imageSize" | "classes";
@@ -27,6 +29,7 @@ export function initialFormState(): DetectionFormState {
     confidence: DEFAULT_CONFIDENCE.toFixed(2),
     imageSize: DEFAULT_IMAGE_SIZE,
     classes: [...VEHICLE_CLASS_IDS],
+    tracking: false,
   };
 }
 
@@ -74,5 +77,6 @@ export function toRequest(form: DetectionFormState, model: ModelConfig): CreateD
     confidence: parseConfidence(form.confidence) ?? DEFAULT_CONFIDENCE,
     imageSize: form.imageSize,
     classes: [...new Set(form.classes)].sort((a, b) => a - b),
+    processingMode: form.tracking ? "DETECTION_TRACKING" : "DETECTION_ONLY",
   };
 }

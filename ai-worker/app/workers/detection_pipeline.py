@@ -138,6 +138,8 @@ class DetectionPipeline:
                         ),
                         statistics=statistics,
                         processing_time_ms=duration_ms,
+                        processing_mode=processed.processing_mode,
+                        tracking=processed.tracking,
                     )
                     (stage_dir / metadata_path.name).write_text(
                         result.model_dump_json(by_alias=True, indent=2), encoding="utf-8"

@@ -17,6 +17,7 @@ describe("detection form", () => {
       confidence: "0.25",
       imageSize: 640,
       classes: [1, 2, 3, 5, 7],
+      tracking: false,
     });
   });
 
@@ -53,7 +54,7 @@ describe("detection form", () => {
 
   it("reports each invalid field", () => {
     const errors = validateForm(
-      { videoUrl: "https://example.com", confidence: "1.5", imageSize: 500, classes: [] },
+      { videoUrl: "https://example.com", confidence: "1.5", imageSize: 500, classes: [], tracking: false },
       enabled,
     );
     expect(Object.keys(errors).sort()).toEqual(["classes", "confidence", "imageSize", "videoUrl"]);
@@ -72,7 +73,14 @@ describe("detection form", () => {
       confidence: 0.4,
       imageSize: 960,
       classes: [0, 2, 7],
+      processingMode: "DETECTION_ONLY",
     });
-    expect(Object.keys(body).sort()).toEqual(["classes", "confidence", "imageSize", "modelKey", "videoUrl"]);
+    expect(Object.keys(body).sort()).toEqual(
+      ["classes", "confidence", "imageSize", "modelKey", "processingMode", "videoUrl"]);
+  });
+
+  it("requests ByteTrack only when tracking is switched on", () => {
+    expect(toRequest(valid({ tracking: true }), enabled).processingMode).toBe("DETECTION_TRACKING");
+    expect(toRequest(valid({ tracking: false }), enabled).processingMode).toBe("DETECTION_ONLY");
   });
 });

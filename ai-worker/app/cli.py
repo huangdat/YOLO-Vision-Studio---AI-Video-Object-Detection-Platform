@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from app.config.logging import logging_config
 from app.config.settings import get_settings
 from app.core.exceptions import DetectionEngineError
-from app.schemas.detection import DetectionRequest, SourceType
+from app.schemas.detection import DetectionRequest, ProcessingMode, SourceType
 from app.schemas.progress import ProgressEvent
 
 
@@ -36,6 +36,8 @@ def parser() -> argparse.ArgumentParser:
     detect.add_argument("--classes", type=parse_classes)
     detect.add_argument("--device", choices=("auto", "cpu", "cuda:0"))
     detect.add_argument("--output", type=Path, help="Optional MP4 path inside AI_OUTPUT_DIR; existing files are rejected")
+    detect.add_argument("--tracking", action="store_true",
+                        help="Also run ByteTrack so detections keep persistent Track IDs")
     prepare = commands.add_parser(
         "prepare-model", help="Alias of 'models prepare': download if needed, then load and verify"
     )
@@ -138,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             classes=args.classes,
             device=args.device,
             output_path=args.output,
+            processing_mode=ProcessingMode.DETECTION_TRACKING if args.tracking else ProcessingMode.DETECTION_ONLY,
         )
         from app.workers.detection_pipeline import DetectionPipeline
 
@@ -146,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
 
         result = DetectionPipeline(settings).process_video(request, on_progress=display)
         print(result.statistics.model_dump_json(by_alias=True, indent=2))
+        if getattr(result, "tracking", None) is not None:
+            print(result.tracking.model_dump_json(by_alias=True, indent=2, exclude={"tracks"}))
         print(f"Output video: {result.output.video_path}")
         print(f"Result JSON: {result.output.metadata_path}")
         return 0

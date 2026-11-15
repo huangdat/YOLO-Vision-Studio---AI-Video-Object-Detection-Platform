@@ -13,11 +13,12 @@ from app.config.settings import Settings
 from app.core.exceptions import (
     DetectionEngineError, InvalidVideoSourceError, VideoLimitExceededError, VideoProcessingError,
 )
-from app.schemas.detection import DetectionRequest, DetectionStatistics
+from app.schemas.detection import DetectionRequest, DetectionStatistics, ProcessingMode
 from app.schemas.progress import ProgressCallback, ProgressEvent, ProgressStage
 from app.schemas.video import ProcessingResult, VideoMetadata
 from app.services.detection_service import DetectionService
 from app.services.model_loader import ModelLoader
+from app.services.object_tracking import ByteTrackParameters, ObjectTracker, TrackingAccumulator
 
 logger = logging.getLogger(__name__)
 DEFAULT_CLASSES = [1, 2, 3, 5, 7]
@@ -27,10 +28,12 @@ class VideoProcessor:
     def __init__(
         self, settings: Settings, model_loader: ModelLoader | None = None,
         detection_service: DetectionService | None = None,
+        tracker_factory: type[ObjectTracker] | None = None,
     ) -> None:
         self.settings = settings
         self.model_loader = model_loader or ModelLoader(settings)
         self.detection_service = detection_service or DetectionService()
+        self.tracker_factory = tracker_factory or ObjectTracker
 
     @staticmethod
     def _opencv() -> Any:
@@ -117,8 +120,11 @@ class VideoProcessor:
         # The annotated MJPG intermediate is far larger than a compressed source, so it has
         # its own disk budget; AI_MAX_VIDEO_SIZE_MB limits only the source/download.
         intermediate_limit = self.settings.max_intermediate_size_mb * 1024 * 1024
+        tracking = request.processing_mode == ProcessingMode.DETECTION_TRACKING
         writer: Any = None
         frames: Any = None
+        tracker: ObjectTracker | None = None
+        accumulator: TrackingAccumulator | None = None
         processed = 0
         summary: Counter[str] = Counter()
         measured_time = 0.0
@@ -131,9 +137,21 @@ class VideoProcessor:
             )
             if not writer.isOpened():
                 raise VideoProcessingError("The intermediate video writer could not be initialized.")
-            frames = self.detection_service.iter_frames(
-                video_path, loaded, confidence, image_size, classes,
-            )
+            if tracking:
+                # One tracker per job: IDs and track state never outlive this call. Every decoded
+                # frame is processed in order (no frame skipping), so IDs are not broken by sampling.
+                parameters = ByteTrackParameters.for_confidence(confidence, self.settings.tracking_track_buffer)
+                tracker = self.tracker_factory(parameters,
+                                               trajectory_length=self.settings.tracking_trajectory_length)
+                accumulator = TrackingAccumulator(parameters, dict(getattr(loaded, "names", {}) or {}),
+                                                  metadata.fps, self.settings.tracking_max_reported_tracks)
+                frames = self.detection_service.iter_frames(
+                    video_path, loaded, confidence, image_size, classes, tracker=tracker,
+                )
+            else:
+                frames = self.detection_service.iter_frames(
+                    video_path, loaded, confidence, image_size, classes,
+                )
             for detected in frames:
                 if perf_counter() - started > self.settings.processing_timeout_seconds:
                     raise VideoLimitExceededError("Video processing exceeded the configured time limit.")
@@ -150,7 +168,13 @@ class VideoProcessor:
                         cv2.BORDER_CONSTANT, value=(0, 0, 0),
                     )
                 writer.write(image)
-                summary.update(box.label for box in detected.boxes)
+                if detected.tracked is not None and accumulator is not None:
+                    accumulator.add(detected.tracked)
+                    # Detection events keep Detection Only semantics: boxes at or above the
+                    # confidence threshold, whether or not they carry a Track ID.
+                    summary.update(box.label for box in detected.tracked.threshold_detections)
+                else:
+                    summary.update(box.label for box in detected.boxes)
                 if detected.inference_time_ms is not None:
                     measured_time += detected.inference_time_ms
                     measured_frames += 1
@@ -196,6 +220,8 @@ class VideoProcessor:
                 ))
             return ProcessingResult(
                 path=output_path, metadata=metadata,
+                processing_mode=request.processing_mode,
+                tracking=accumulator.result() if accumulator is not None else None,
                 statistics=DetectionStatistics(
                     model_key=loaded.model_key, device=loaded.device, confidence=confidence,
                     image_size=image_size, classes=classes, total_frames_processed=processed,
@@ -223,6 +249,9 @@ class VideoProcessor:
                     logger.warning("Could not close the frame processing iterator", exc_info=True)
             if writer is not None:
                 self._release_writer(writer)
+            if tracker is not None:
+                # Completed, failed, or interrupted: the job's track state is always released.
+                tracker.close()
 
     @staticmethod
     def _release_writer(writer: Any) -> None:

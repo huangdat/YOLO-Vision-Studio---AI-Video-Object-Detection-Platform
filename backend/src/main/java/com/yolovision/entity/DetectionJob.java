@@ -78,6 +78,11 @@ public class DetectionJob {
     @Column(name = "status", nullable = false, length = 32)
     private DetectionJobStatus status = DetectionJobStatus.PENDING;
 
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "processing_mode", nullable = false, length = 32)
+    private ProcessingMode processingMode = ProcessingMode.DETECTION_ONLY;
+
     @Min(0)
     @Max(100)
     @Column(name = "progress", nullable = false)
@@ -175,6 +180,14 @@ public class DetectionJob {
 
     public DetectionJobStatus getStatus() {
         return status;
+    }
+
+    public ProcessingMode getProcessingMode() {
+        return processingMode;
+    }
+
+    public void setProcessingMode(ProcessingMode processingMode) {
+        this.processingMode = processingMode;
     }
 
     public void setStatus(DetectionJobStatus status) {

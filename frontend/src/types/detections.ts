@@ -14,6 +14,12 @@ export type DetectionJobStatus = (typeof DETECTION_JOB_STATUSES)[number];
 
 export type DetectionSourceType = "YOUTUBE_URL" | "LOCAL_FILE";
 
+/**
+ * DETECTION_ONLY analyses frames independently. DETECTION_TRACKING also runs ByteTrack in the
+ * worker, so detections keep a Track ID within the job. Missing in legacy data: Detection Only.
+ */
+export type ProcessingMode = "DETECTION_ONLY" | "DETECTION_TRACKING";
+
 /** DetectionJobDetailsResponse (GET /detections/{jobId}). */
 export interface DetectionJob {
   jobId: string;
@@ -33,6 +39,7 @@ export interface DetectionJob {
   updatedAt: string;
   errorCode: string | null;
   errorMessage: string | null;
+  processingMode: ProcessingMode;
 }
 
 /** DetectionJobSummaryResponse (one row of GET /detections). */
@@ -44,6 +51,7 @@ export interface DetectionJobSummary {
   createdAt: string;
   completedAt: string | null;
   errorCode: string | null;
+  processingMode: ProcessingMode;
 }
 
 export interface DetectionHistoryQuery {
@@ -71,6 +79,22 @@ export interface DetectionResultMetadata {
   resultMetadataAvailable: boolean;
   createdAt: string;
   completedAt: string | null;
+  processingMode: ProcessingMode;
+  /** Only for tracking jobs whose worker reported tracking totals. */
+  tracking: TrackingSummary | null;
+}
+
+/**
+ * ByteTrack totals of a tracking job. `uniqueTrackIds` counts the IDs assigned within the job;
+ * ID switches and fragmentation mean it is not guaranteed to equal the number of physical objects.
+ */
+export interface TrackingSummary {
+  tracker: string;
+  uniqueTrackIds: number;
+  maxActiveTracks: number;
+  trackedDetections: number;
+  uniqueTrackIdsByClass: Record<string, number>;
+  countSemantics: string;
 }
 
 /** Payload of the SSE events detection.progress/completed/failed/cancelled. */
@@ -91,6 +115,7 @@ export interface CreateDetectionRequest {
   confidence: number;
   imageSize: number;
   classes: number[];
+  processingMode: ProcessingMode;
 }
 
 /** DetectionJobAcceptedResponse, returned with HTTP 202 and a Location header. */

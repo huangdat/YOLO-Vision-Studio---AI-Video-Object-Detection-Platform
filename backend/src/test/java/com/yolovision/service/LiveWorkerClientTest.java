@@ -27,12 +27,14 @@ class LiveWorkerClientTest {
     private final AtomicReference<String> lastQuery = new AtomicReference<>();
     private final AtomicReference<String> lastType = new AtomicReference<>();
     private final AtomicReference<Integer> lastBodyLength = new AtomicReference<>();
+    private final AtomicReference<String> lastMethod = new AtomicReference<>();
 
     private void start(int status, String body, long delayMillis) throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/internal/live", exchange -> {
             lastQuery.set(exchange.getRequestURI().getRawPath() + "?" + exchange.getRequestURI().getRawQuery());
             lastType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+            lastMethod.set(exchange.getRequestMethod());
             lastBodyLength.set(exchange.getRequestBody().readAllBytes().length);
             try {
                 Thread.sleep(delayMillis);
@@ -87,6 +89,35 @@ class LiveWorkerClientTest {
     }
 
     @Test
+    void trackingFramesCarryTheSessionIdAndTrackIdsAreParsed() throws Exception {
+        start(200, """
+                {"frameId":7,"modelKey":"yolo11n","width":640,"height":480,"tracking":true,"activeTracks":1,
+                 "detections":[{"classId":2,"label":"car","confidence":0.87,"box":[120,85,310,260],"trackId":3},
+                               {"classId":0,"label":"person","confidence":0.4,"box":[1,2,3,4],"trackId":null}],
+                 "inferenceMs":85.0}
+                """, 0);
+
+        WorkerResult result = client.infer(new byte[] {(byte) 0xFF, (byte) 0xD8}, 7, "yolo11n", "0.25", 416,
+                List.of(0, 2), "0f8f3c52-6b1e-4a43-9a51-1b2c3d4e5f60").join();
+
+        assertThat(lastQuery.get()).endsWith("&classes=0,2&tracking=true&sessionId=0f8f3c52-6b1e-4a43-9a51-1b2c3d4e5f60");
+        assertThat(result.tracking()).isTrue();
+        assertThat(result.activeTracks()).isEqualTo(1);
+        assertThat(result.detections().get(0).trackId()).isEqualTo(3L);
+        assertThat(result.detections().get(1).trackId()).isNull();
+    }
+
+    @Test
+    void endingATrackingSessionDeletesTheWorkerSession() throws Exception {
+        start(204, "", 0);
+
+        client.endTrackingSession("0f8f3c52-6b1e-4a43-9a51-1b2c3d4e5f60").join();
+
+        assertThat(lastMethod.get()).isEqualTo("DELETE");
+        assertThat(lastQuery.get()).startsWith("/internal/live/sessions/0f8f3c52-6b1e-4a43-9a51-1b2c3d4e5f60");
+    }
+
+    @Test
     void loadRequestsTheModelAtTheSessionImageSize() throws Exception {
         start(200, "{\"modelKey\":\"yolo11n\",\"device\":\"cpu\",\"classes\":80}", 0);
         assertThat(client.load("yolo11n", 320).join().device()).isEqualTo("cpu");
@@ -95,7 +126,8 @@ class LiveWorkerClientTest {
 
     @ParameterizedTest
     @CsvSource({"409,MODEL_NOT_PREPARED", "404,MODEL_NOT_SUPPORTED", "400,INVALID_FRAME", "413,FRAME_TOO_LARGE",
-        "500,INFERENCE_FAILED", "503,MODEL_LOAD_FAILED", "429,WORKER_BUSY"})
+        "500,INFERENCE_FAILED", "503,MODEL_LOAD_FAILED", "429,WORKER_BUSY", "409,FRAME_OUT_OF_ORDER",
+        "409,SESSION_ENDED", "429,TRACKING_CAPACITY"})
     void workerErrorCodesArePreserved(int status, String code) throws Exception {
         start(status, "{\"error\":{\"code\":\"" + code + "\",\"message\":\"detail\"}}", 0);
         assertThatThrownBy(() -> client.infer(new byte[] {1}, 1, "yolo11n", "0.25", 416, List.of(2)).join())

@@ -9,7 +9,8 @@ from app.config.settings import Settings
 from app.core.exceptions import (
     ArtifactStorageError, InvalidVideoSourceError, ModelLoadingError, VideoDownloadError, VideoEncodingError,
 )
-from app.schemas.messaging import DetectionEvent, WorkerJobStatus
+from app.schemas.detection import ProcessingMode
+from app.schemas.messaging import DetectionCommand, DetectionEvent, WorkerJobStatus
 from app.schemas.progress import ProgressEvent, ProgressStage
 from app.services.artifact_storage import ArtifactKeys
 from app.workers.job_processor import (
@@ -83,8 +84,10 @@ class FakePipeline:
         out.mkdir(parents=True)
         video = out / "detected.mp4"
         video.write_bytes(b"encoded video")
+        tracking = request.processing_mode == ProcessingMode.DETECTION_TRACKING
         return SimpleNamespace(
             model_key=self.model_key or request.model_key,
+            processing_mode=request.processing_mode,
             output=SimpleNamespace(video_path=video),
             statistics=SimpleNamespace(total_frames_processed=36),
             model_dump_json=lambda by_alias: json.dumps({
@@ -92,6 +95,10 @@ class FakePipeline:
                 "processingTimeMs": 7058, "output": {"videoPath": str(video), "metadataPath": "x"},
                 "statistics": {"totalFramesProcessed": 36, "detectionsByClass": {"bus": 36},
                                "modelKey": request.model_key},
+                "processingMode": request.processing_mode.value,
+                "tracking": {"tracker": "bytetrack", "uniqueTrackIds": 2, "maxActiveTracks": 2,
+                             "trackedDetections": 60, "uniqueTrackIdsByClass": {"bus": 2},
+                             "tracks": [{"trackId": 1}, {"trackId": 2}]} if tracking else None,
             }),
         )
 
@@ -136,6 +143,51 @@ def test_successful_job_publishes_progress_uploading_and_completion_then_acks(en
     assert completion.result.total_frames == 36 and completion.result.processing_time_ms == 7058
     assert completion.result.detection_summary == {"bus": 36}
     assert environment.preloads == [("yolo11n", False)]
+
+
+def test_legacy_commands_without_a_processing_mode_run_detection_only(environment):
+    sink = RecordingSink()
+
+    environment.processor.handle(command_bytes(), 1, sink)
+
+    assert environment.pipelines[0].requests[0].processing_mode == ProcessingMode.DETECTION_ONLY
+    completion = sink.events[-1].to_json_bytes()
+    # Detection-only completion events are unchanged: no tracking fields at all.
+    assert b"tracking" not in completion and b"processingMode" not in completion
+
+
+def test_tracking_mode_is_propagated_and_reported_in_the_completion(environment):
+    sink = RecordingSink()
+
+    settlement = environment.processor.handle(command_bytes(processingMode="DETECTION_TRACKING"), 1, sink)
+
+    assert settlement.disposition == Disposition.ACK
+    assert environment.pipelines[0].requests[0].processing_mode == ProcessingMode.DETECTION_TRACKING
+    result = sink.events[-1].result
+    assert result.processing_mode == ProcessingMode.DETECTION_TRACKING
+    assert result.tracking.unique_track_ids == 2 and result.tracking.max_active_tracks == 2
+    assert result.tracking.unique_track_ids_by_class == {"bus": 2}
+    _, manifest = environment.store.uploads[0]
+    assert manifest["processingMode"] == "DETECTION_TRACKING"
+    assert [track["trackId"] for track in manifest["tracking"]["tracks"]] == [1, 2]
+    body = json.loads(sink.events[-1].to_json_bytes())
+    assert body["result"]["tracking"]["uniqueTrackIds"] == 2
+    assert body["result"]["processingMode"] == "DETECTION_TRACKING"
+
+
+def test_redelivered_tracking_job_republishes_tracking_totals_from_storage(environment):
+    environment.processor.handle(command_bytes(processingMode="DETECTION_TRACKING"), 1, RecordingSink())
+    sink = RecordingSink()
+
+    environment.processor.handle(command_bytes(processingMode="DETECTION_TRACKING", messageId=str(uuid4())), 2, sink)
+
+    assert sink.statuses() == ["COMPLETED"] and len(environment.pipelines) == 1
+    assert sink.events[-1].result.tracking.unique_track_ids == 2
+
+
+def test_unknown_processing_modes_are_rejected():
+    with pytest.raises(ValueError):
+        DetectionCommand.model_validate_json(command_bytes(processingMode="OFFLINE_TRACKING"))
 
 
 def test_progress_is_monotonic_below_completion_and_throttled(environment):

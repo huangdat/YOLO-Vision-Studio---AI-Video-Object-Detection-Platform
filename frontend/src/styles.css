@@ -2084,3 +2084,59 @@ fieldset:disabled .class-option {
     flex: 1 1 100%;
   }
 }
+
+/* Object tracking (ByteTrack) ------------------------------------------------------------- */
+.tracking-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tracking-toggle.is-on {
+  border-color: var(--primary-soft-strong);
+  background: var(--primary-soft);
+}
+.tracking-toggle input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+}
+.tracking-toggle .field-hint {
+  margin: 4px 0 0;
+}
+.tracking-toggle-label {
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.tracking-toggle-tag,
+.tracking-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft-strong);
+  color: var(--primary-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.tracking-summary {
+  margin-top: 24px;
+}
+.tracking-classes {
+  margin-top: 12px;
+}
+.tracking-note {
+  margin: 12px 0 0;
+}
+.live-track-count {
+  color: var(--primary-text);
+}

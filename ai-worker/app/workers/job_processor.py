@@ -31,7 +31,10 @@ from app.core.exceptions import (
     VideoNormalizationError, VideoProbeError, VideoProcessingError, VideoStreamMissingError,
 )
 from app.schemas.detection import DetectionRequest, SourceType
-from app.schemas.messaging import DetectionCommand, DetectionEvent, EventError, EventResult, WorkerJobStatus
+from app.schemas.detection import ProcessingMode
+from app.schemas.messaging import (
+    DetectionCommand, DetectionEvent, EventError, EventResult, EventTracking, WorkerJobStatus,
+)
 from app.schemas.progress import ProgressEvent, ProgressStage
 from app.services.artifact_storage import ArtifactStore
 from app.services.model_registry import CacheStatus, get_model_spec, inspect_model
@@ -204,8 +207,8 @@ class DetectionJobProcessor:
             command = DetectionCommand.model_validate_json(body)
         except ValidationError as error:
             return self._reject_invalid(body, error, sink)
-        logger.info("Received job %s (model %s, %s, attempt %d)", command.job_id, command.model_key,
-                    command.source_type.value, attempt)
+        logger.info("Received job %s (model %s, %s, %s, attempt %d)", command.job_id, command.model_key,
+                    command.source_type.value, command.processing_mode.value, attempt)
         progress: dict[str, int] = {"value": 0}
         try:
             existing = self.store.find_completed(command.job_id)
@@ -283,6 +286,8 @@ class DetectionJobProcessor:
                 )
                 if result.model_key != command.model_key:
                     raise VideoProcessingError("The pipeline loaded a different model than requested.")
+                if result.processing_mode != command.processing_mode:
+                    raise VideoProcessingError("The pipeline used a different processing mode than requested.")
                 uploading = DetectionEvent(job_id=command.job_id, status=WorkerJobStatus.UPLOADING,
                                            progress=UPLOADING_PROGRESS,
                                            processed_frames=result.statistics.total_frames_processed,
@@ -305,7 +310,7 @@ class DetectionJobProcessor:
         return DetectionRequest(
             source=source, source_type=command.source_type, model_key=command.model_key,
             confidence=float(command.confidence), image_size=command.image_size,
-            classes=list(command.classes),
+            classes=list(command.classes), processing_mode=command.processing_mode,
         )
 
     @staticmethod
@@ -324,6 +329,11 @@ class DetectionJobProcessor:
         try:
             statistics = manifest["statistics"]
             artifacts = manifest["artifacts"]
+            # Manifests stored before tracking existed have neither field: Detection Only.
+            mode = ProcessingMode(manifest.get("processingMode", ProcessingMode.DETECTION_ONLY.value))
+            tracking = manifest.get("tracking")
+            if mode != command.processing_mode:
+                raise ArtifactStorageError("The stored result was produced with a different processing mode.")
             return DetectionEvent(
                 job_id=command.job_id, status=WorkerJobStatus.COMPLETED, progress=100,
                 processed_frames=statistics["totalFramesProcessed"],
@@ -335,9 +345,15 @@ class DetectionJobProcessor:
                     total_frames=statistics["totalFramesProcessed"],
                     processing_time_ms=manifest["processingTimeMs"],
                     detection_summary=statistics["detectionsByClass"],
+                    processing_mode=mode if mode == ProcessingMode.DETECTION_TRACKING else None,
+                    tracking=EventTracking(
+                        unique_track_ids=tracking["uniqueTrackIds"], max_active_tracks=tracking["maxActiveTracks"],
+                        tracked_detections=tracking["trackedDetections"],
+                        unique_track_ids_by_class=tracking["uniqueTrackIdsByClass"],
+                    ) if tracking is not None else None,
                 ),
             )
-        except (KeyError, TypeError, ValidationError) as error:
+        except (KeyError, TypeError, ValueError, ValidationError) as error:
             raise ArtifactStorageError("The stored result manifest is incomplete.") from error
 
     @staticmethod

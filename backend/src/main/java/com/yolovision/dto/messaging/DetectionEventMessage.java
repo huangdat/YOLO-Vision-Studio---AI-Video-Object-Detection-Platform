@@ -1,5 +1,6 @@
 package com.yolovision.dto.messaging;
 
+import com.yolovision.entity.ProcessingMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -35,7 +36,24 @@ public record DetectionEventMessage(
             @NotBlank @Size(max = 1024) String resultJsonKey,
             @NotNull @PositiveOrZero Integer totalFrames,
             @NotNull @PositiveOrZero Long processingTimeMs,
-            @NotNull Map<@NotBlank @Size(max = 128) String, @NotNull @PositiveOrZero Long> detectionSummary) {
+            @NotNull Map<@NotBlank @Size(max = 128) String, @NotNull @PositiveOrZero Long> detectionSummary,
+            ProcessingMode processingMode,
+            @Valid Tracking tracking) {
+
+        /** Completion of a detection-only job (no tracking fields), as sent by every worker version. */
+        public Result(String outputVideoKey, String resultJsonKey, Integer totalFrames, Long processingTimeMs,
+                Map<String, Long> detectionSummary) {
+            this(outputVideoKey, resultJsonKey, totalFrames, processingTimeMs, detectionSummary, null, null);
+        }
+    }
+
+    /** Compact tracking totals of a DETECTION_TRACKING job; full per-track data is in result.json. */
+    public record Tracking(
+            @NotBlank @Pattern(regexp = "^bytetrack$") String tracker,
+            @NotNull @PositiveOrZero Long uniqueTrackIds,
+            @NotNull @PositiveOrZero Integer maxActiveTracks,
+            @NotNull @PositiveOrZero Long trackedDetections,
+            @NotNull Map<@NotBlank @Size(max = 128) String, @NotNull @PositiveOrZero Long> uniqueTrackIdsByClass) {
     }
 
     public record Error(

@@ -101,6 +101,35 @@ describe("detection API", () => {
     expect(metadata.countSemantics).toBe("BOUNDING_BOX_DETECTIONS_ACROSS_FRAMES");
   });
 
+  it("treats responses without a processing mode as legacy Detection Only data", async () => {
+    const { processingMode: _job, ...legacyJob } = job();
+    const { processingMode: _result, tracking: _tracking, ...legacyResult } = result();
+    const { processingMode: _row, ...legacyRow } = summary();
+    vi.spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: legacyJob })
+      .mockResolvedValueOnce({ data: legacyResult })
+      .mockResolvedValueOnce({ data: page([legacyRow]) });
+
+    expect((await getDetection(JOB_ID)).processingMode).toBe("DETECTION_ONLY");
+    const metadata = await getDetectionResult(JOB_ID);
+    expect(metadata.processingMode).toBe("DETECTION_ONLY");
+    expect(metadata.tracking).toBeNull();
+    expect((await listDetections()).content[0].processingMode).toBe("DETECTION_ONLY");
+  });
+
+  it("parses tracking totals and rejects unknown processing modes", async () => {
+    vi.spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: result({ processingMode: "DETECTION_TRACKING", tracking: {
+        tracker: "bytetrack", uniqueTrackIds: 6, maxActiveTracks: 4, trackedDetections: 310,
+        uniqueTrackIdsByClass: { car: 6 }, countSemantics: "TRACK_IDS_ASSIGNED_BY_BYTETRACK" } }) })
+      .mockResolvedValueOnce({ data: { ...job(), processingMode: "OFFLINE_TRACKING" } });
+
+    const metadata = await getDetectionResult(JOB_ID);
+    expect(metadata.tracking?.uniqueTrackIds).toBe(6);
+    expect(metadata.tracking?.uniqueTrackIdsByClass).toEqual({ car: 6 });
+    await expect(getDetection(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
+  });
+
   it("propagates request cancellation as a cancelled ApiError", async () => {
     vi.spyOn(apiClient, "get").mockRejectedValueOnce(new CanceledError());
     await expect(getDetection(JOB_ID, new AbortController().signal)).rejects.toMatchObject({
@@ -137,6 +166,7 @@ describe("detection submission API", () => {
     confidence: 0.25,
     imageSize: 640,
     classes: [1, 2, 3, 5, 7],
+    processingMode: "DETECTION_TRACKING" as const,
   };
 
   it("posts exactly the request body and parses the 202 response", async () => {

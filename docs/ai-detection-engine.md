@@ -276,6 +276,6 @@ Resources and owned temporary files are released on errors and interruption. Sou
 
 Phase 04 added model management by extending the model-loading boundary, without replacing detection processing. Phase 05 can call `DetectionPipeline` from a RabbitMQ consumer and translate the same progress/result contracts into messages. Phase 06 adds Spring Boot detection APIs. Broker acknowledgements, retries, job persistence, storage transfer, and public authorization belong to those future integrations.
 
-The PostgreSQL `yolo26s` metadata stays disabled in Phase 03. Local CLI model support does not automatically advertise application availability. No tracking or unique-object counting is implemented.
+The PostgreSQL `yolo26s` metadata stays disabled in Phase 03. Local CLI model support does not automatically advertise application availability. Optional ByteTrack tracking (`python -m app.cli detect ... --tracking`, or `processingMode` on jobs) is described in [object-tracking.md](object-tracking.md).
 
 Review the [official Ultralytics licensing terms](https://www.ultralytics.com/license) before commercial deployment. The [Ultralytics YOLO26 model documentation](https://docs.ultralytics.com/models/yolo26) and [PyTorch installation guidance](https://pytorch.org/get-started/previous-versions/) document the model family and supported device installations.

@@ -24,7 +24,16 @@ public record CreateDetectionRequest(
         Integer imageSize,
         @Schema(description = "1-100 unique class ids of the model; default COCO vehicles [1,2,3,5,7]",
                 example = "[1, 2, 3, 5, 7]")
-        List<Integer> classes) {
+        List<Integer> classes,
+        @Schema(description = "DETECTION_ONLY (default) or DETECTION_TRACKING (adds ByteTrack Track IDs)",
+                example = "DETECTION_TRACKING", allowableValues = {"DETECTION_ONLY", "DETECTION_TRACKING"})
+        String processingMode) {
+
+    /** Requests written before tracking existed (no processingMode) mean Detection Only. */
+    public CreateDetectionRequest(String videoUrl, String modelKey, BigDecimal confidence, Integer imageSize,
+            List<Integer> classes) {
+        this(videoUrl, modelKey, confidence, imageSize, classes, null);
+    }
 
     /**
      * Spring Boot's mapper ignores unknown properties globally; this public contract rejects

@@ -116,6 +116,36 @@ describe("Detection details page", () => {
     expect(FakeEventSource.instances).toHaveLength(0);
   });
 
+  it("shows tracking statistics only for tracking jobs with real tracking data", async () => {
+    vi.mocked(getDetection).mockResolvedValue(
+      job({ status: "COMPLETED", progress: 100, processingMode: "DETECTION_TRACKING" }));
+    vi.mocked(getDetectionResult).mockResolvedValueOnce(result({
+      processingMode: "DETECTION_TRACKING",
+      tracking: { tracker: "bytetrack", uniqueTrackIds: 6, maxActiveTracks: 4, trackedDetections: 310,
+        uniqueTrackIdsByClass: { car: 5, bus: 1 }, countSemantics: "TRACK_IDS_ASSIGNED_BY_BYTETRACK" },
+    }));
+    renderJob();
+
+    expect(await screen.findByText("Object tracking (ByteTrack)")).toBeTruthy();
+    expect(screen.getByText("Detection + Tracking (ByteTrack)")).toBeTruthy();
+    expect(screen.getByText("Unique track IDs").nextElementSibling?.textContent).toBe("6");
+    expect(screen.getByText("Car: 5 tracks")).toBeTruthy();
+    expect(screen.getByText(/do not guarantee, the number of distinct objects/)).toBeTruthy();
+    // Detection events keep their own meaning next to the track totals.
+    expect(screen.getByText("Detection events")).toBeTruthy();
+  });
+
+  it("never shows tracking metrics for detection-only or legacy jobs", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100 }));
+    vi.mocked(getDetectionResult).mockResolvedValueOnce(result());
+    renderJob();
+
+    expect(await screen.findByText("Detection events")).toBeTruthy();
+    expect(screen.getByText("Detection only")).toBeTruthy();
+    expect(screen.queryByText("Object tracking (ByteTrack)")).toBeNull();
+    expect(screen.queryByText("Unique track IDs")).toBeNull();
+  });
+
   it("explains a completed job without detections", async () => {
     vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100 }));
     vi.mocked(getDetectionResult).mockResolvedValue(result({ detectionSummary: {}, totalDetections: 0 }));

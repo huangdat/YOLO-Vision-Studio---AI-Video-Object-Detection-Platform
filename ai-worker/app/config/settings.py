@@ -108,6 +108,16 @@ class Settings(BaseSettings):
                                      validation_alias="MINIO_OBJECT_PREFIX")
     minio_region: str | None = Field(default=None, validation_alias="MINIO_REGION")
 
+    # ByteTrack (tracking mode only). The buffer is in processed frames: a lost track is kept
+    # for this many frames before its ID is retired.
+    tracking_track_buffer: int = Field(default=30, ge=1, le=600, validation_alias="AI_TRACKING_TRACK_BUFFER")
+    tracking_trajectory_length: int = Field(
+        default=20, ge=0, le=120, validation_alias="AI_TRACKING_TRAJECTORY_LENGTH"
+    )
+    tracking_max_reported_tracks: int = Field(
+        default=5000, ge=1, le=100_000, validation_alias="AI_TRACKING_MAX_REPORTED_TRACKS"
+    )
+
     # Live (webcam) inference: an internal HTTP API served by the dedicated ai-live-worker.
     live_max_frame_bytes: int = Field(
         default=512 * 1024, ge=1024, le=8 * 1024 * 1024, validation_alias="LIVE_MAX_FRAME_BYTES"
@@ -120,6 +130,14 @@ class Settings(BaseSettings):
     live_max_concurrent_inferences: int = Field(
         default=1, ge=1, le=4, validation_alias="LIVE_MAX_CONCURRENT_INFERENCES"
     )
+    # Live tracking state is in memory only, one tracker per gateway session, and expires when
+    # a session stops sending frames. Live frames are sparse (a few per second at most), so the
+    # lost-track buffer is shorter than for videos.
+    live_max_tracking_sessions: int = Field(default=4, ge=1, le=32, validation_alias="LIVE_MAX_TRACKING_SESSIONS")
+    live_tracking_session_ttl_seconds: float = Field(
+        default=30, ge=1, le=3600, allow_inf_nan=False, validation_alias="LIVE_TRACKING_SESSION_TTL_SECONDS"
+    )
+    live_tracking_track_buffer: int = Field(default=10, ge=1, le=300, validation_alias="LIVE_TRACKING_TRACK_BUFFER")
 
     @property
     def live_allowed_model_sizes(self) -> frozenset[str]:

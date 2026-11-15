@@ -230,6 +230,7 @@ describe("Detection workspace", () => {
       confidence: 0.4,
       imageSize: 960,
       classes: [0, 1, 2, 3, 5, 7],
+      processingMode: "DETECTION_ONLY",
     });
     expect(await screen.findByText("Submitting the detection job…")).toBeTruthy();
     expect((submitButton() as HTMLButtonElement).disabled).toBe(true);
@@ -238,6 +239,22 @@ describe("Detection workspace", () => {
     resolve(accepted);
     await waitFor(() => expect(currentLocation(container)).toBe(`/detections/${JOB_ID}`));
     expect(createDetection).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers an opt-in object tracking toggle and submits the tracking mode", async () => {
+    vi.mocked(createDetection).mockResolvedValueOnce(accepted);
+    renderWorkspace();
+    await screen.findByLabelText("YOLO version");
+    const toggle = screen.getByRole("switch", { name: /Object tracking/ }) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.getByText("Assign persistent IDs to detected objects across video frames.")).toBeTruthy();
+
+    fireEvent.change(urlInput(), { target: { value: URL } });
+    fireEvent.click(toggle);
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(createDetection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(createDetection).mock.calls[0][0].processingMode).toBe("DETECTION_TRACKING");
   });
 
   it("does not call the API for an invalid form and focuses the first invalid field", async () => {

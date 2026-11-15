@@ -10,6 +10,7 @@ from typing import Any
 from app.core.exceptions import InferenceError
 from app.schemas.detection import DetectionBox
 from app.services.model_loader import LoadedModel
+from app.services.object_tracking import ObjectTracker, TrackedFrame, annotate_tracked
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,8 @@ class DetectedFrame:
     image: Any
     boxes: list[DetectionBox]
     inference_time_ms: float | None = None
+    # Tracking mode only. ``boxes`` then holds the reported objects with their Track IDs.
+    tracked: TrackedFrame | None = None
 
 
 class DetectionService:
@@ -60,14 +63,19 @@ class DetectionService:
 
     def iter_frames(
         self, video_path: Path, loaded_model: LoadedModel, confidence: float,
-        image_size: int, classes: list[int],
+        image_size: int, classes: list[int], tracker: ObjectTracker | None = None,
     ) -> Iterator[DetectedFrame]:
+        """Yields frames in decode order. With ``tracker`` (owned by the caller, one per video)
+        every frame is passed through ByteTrack before it is annotated."""
         self._validate(loaded_model, confidence, image_size, classes)
+        if tracker is not None and tracker.parameters.confidence != confidence:
+            raise InferenceError("The tracker was configured for a different confidence threshold.")
+        inference_confidence = tracker.inference_confidence if tracker is not None else confidence
         stream: Any = None
         with loaded_model.lock:
             try:
                 stream = loaded_model.model.predict(
-                    source=str(video_path), conf=confidence, imgsz=image_size,
+                    source=str(video_path), conf=inference_confidence, imgsz=image_size,
                     classes=classes, device=loaded_model.device, stream=True,
                     save=False, verbose=False,
                 )
@@ -79,10 +87,17 @@ class DetectionService:
                         timing = float(timing)
                         if not math.isfinite(timing) or timing < 0:
                             timing = None
-                    yield DetectedFrame(
-                        image=result.plot(labels=True, conf=True), boxes=boxes,
-                        inference_time_ms=timing,
-                    )
+                    if tracker is None:
+                        yield DetectedFrame(
+                            image=result.plot(labels=True, conf=True), boxes=boxes,
+                            inference_time_ms=timing,
+                        )
+                        continue
+                    tracked = tracker.update(boxes)
+                    image = annotate_tracked(result.orig_img, tracked.objects, loaded_model.names,
+                                             tracker.trajectories)
+                    yield DetectedFrame(image=image, boxes=tracked.objects, inference_time_ms=timing,
+                                        tracked=tracked)
             except InferenceError:
                 raise
             except Exception as error:

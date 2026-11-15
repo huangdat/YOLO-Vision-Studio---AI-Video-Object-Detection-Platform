@@ -77,6 +77,8 @@ class LiveDetectionServiceTest {
         final List<CompletableFuture<WorkerResult>> calls = new ArrayList<>();
         final List<long[]> frames = new ArrayList<>();
         final List<List<Integer>> classes = new ArrayList<>();
+        final List<String> trackingSessions = new ArrayList<>();
+        final List<String> endedSessions = new CopyOnWriteArrayList<>();
         String lastConfidence;
 
         @Override
@@ -86,18 +88,31 @@ class LiveDetectionServiceTest {
 
         @Override
         public CompletableFuture<WorkerResult> infer(byte[] jpeg, long frameId, String modelKey, String confidence,
-                int imageSize, List<Integer> classes) {
+                int imageSize, List<Integer> classes, String trackingSessionId) {
             CompletableFuture<WorkerResult> future = new CompletableFuture<>();
             calls.add(future);
+            trackingSessions.add(trackingSessionId);
             frames.add(new long[] {frameId, jpeg.length, imageSize});
             this.classes.add(classes);
             lastConfidence = confidence;
             return future;
         }
 
+        @Override
+        public CompletableFuture<Void> endTrackingSession(String trackingSessionId) {
+            endedSessions.add(trackingSessionId);
+            return CompletableFuture.completedFuture(null);
+        }
+
         void answer(int index, long frameId) {
             calls.get(index).complete(new WorkerResult(frameId, "yolo11n", 640, 480,
                     List.of(new Detection(2, "car", 0.87, List.of(120.0, 85.0, 310.0, 260.0))), 85.0));
+        }
+
+        void answerTracked(int index, long frameId) {
+            calls.get(index).complete(new WorkerResult(frameId, "yolo11n", 640, 480, List.of(
+                    new Detection(2, "car", 0.87, List.of(120.0, 85.0, 310.0, 260.0), 7L),
+                    new Detection(0, "person", 0.4, List.of(10.0, 20.0, 30.0, 90.0), null)), 85.0, true, 1));
         }
     }
 
@@ -133,6 +148,12 @@ class LiveDetectionServiceTest {
         FakeConnection connection = connect(id);
         service.text(connection, "{\"type\":\"start\",\"version\":1,\"modelKey\":\"yolo11n\",\"confidence\":0.30,"
                 + "\"imageSize\":416,\"classes\":[7,2,1]}");
+        return connection;
+    }
+
+    private FakeConnection startedWithTracking(String id) {
+        FakeConnection connection = connect(id);
+        service.text(connection, "{\"type\":\"start\",\"version\":1,\"modelKey\":\"yolo11n\",\"tracking\":true}");
         return connection;
     }
 
@@ -317,6 +338,94 @@ class LiveDetectionServiceTest {
         assertThat(result.path("detections").get(0).path("box").toString()).isEqualTo("[120.0,85.0,310.0,260.0]");
         assertThat(result.path("inferenceMs").asDouble()).isEqualTo(85.0);
         assertThat(result.path("serverMs").asLong()).isEqualTo(80);
+    }
+
+    // Tracking ------------------------------------------------------------------------------------
+
+    @Test
+    void sessionsWithoutTrackingKeepTheOriginalProtocol() throws Exception {
+        FakeConnection connection = started("a");
+        JsonNode ready = last(connection);
+        service.binary(connection, frame(1, 10));
+        worker.answerTracked(0, 1); // even if a worker sent IDs, detection-only output has none
+
+        assertThat(ready.path("tracking").asBoolean()).isFalse();
+        assertThat(ready.has("tracker")).isFalse();
+        assertThat(worker.trackingSessions).containsExactly((String) null);
+        JsonNode result = last(connection);
+        assertThat(result.has("tracking")).isFalse();
+        assertThat(result.has("activeTracks")).isFalse();
+        assertThat(result.path("detections").get(0).has("trackId")).isFalse();
+        service.text(connection, "{\"type\":\"stop\"}");
+        assertThat(worker.endedSessions).isEmpty();
+    }
+
+    @Test
+    void trackingSessionsForwardTheirOwnSessionIdAndTheWorkersTrackIds() throws Exception {
+        FakeConnection connection = startedWithTracking("a");
+        JsonNode ready = last(connection);
+        service.binary(connection, frame(1, 10));
+        worker.answerTracked(0, 1);
+
+        assertThat(ready.path("tracking").asBoolean()).isTrue();
+        assertThat(ready.path("tracker").asText()).isEqualTo("bytetrack");
+        assertThat(worker.trackingSessions).containsExactly(ready.path("sessionId").asText());
+        JsonNode result = last(connection);
+        assertThat(result.path("tracking").asBoolean()).isTrue();
+        assertThat(result.path("activeTracks").asInt()).isEqualTo(1);
+        assertThat(result.path("detections").get(0).path("trackId").asLong()).isEqualTo(7);
+        // An unconfirmed detection is forwarded without an ID: none is invented.
+        assertThat(result.path("detections").get(1).has("trackId")).isFalse();
+    }
+
+    @Test
+    void separateTrackingSessionsUseSeparateWorkerSessions() throws Exception {
+        LiveDetectionService two = new LiveDetectionService(properties(2), models, worker, mapper, clock::get);
+        FakeConnection first = connect(two, "a");
+        FakeConnection second = connect(two, "b");
+        two.binary(first, frame(1, 10));
+        two.binary(second, frame(1, 10));
+
+        assertThat(worker.trackingSessions).hasSize(2).doesNotHaveDuplicates().doesNotContainNull();
+    }
+
+    private FakeConnection connect(LiveDetectionService target, String id) {
+        FakeConnection connection = new FakeConnection(id);
+        target.opened(connection);
+        target.text(connection, "{\"type\":\"start\",\"version\":1,\"modelKey\":\"yolo11n\",\"tracking\":true}");
+        return connection;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"stop", "close", "idle"})
+    void endingATrackingSessionReleasesTheWorkersTrackState(String exit) throws Exception {
+        FakeConnection connection = startedWithTracking("a");
+        String sessionId = last(connection).path("sessionId").asText();
+        service.binary(connection, frame(1, 10));
+        worker.answerTracked(0, 1);
+
+        switch (exit) {
+            case "stop" -> service.text(connection, "{\"type\":\"stop\"}");
+            case "close" -> service.closed(connection);
+            default -> {
+                advance(61_000);
+                service.sweep();
+            }
+        }
+        service.closed(connection); // cleanup is idempotent
+
+        assertThat(worker.endedSessions).containsExactly(sessionId);
+        assertThat(service.activeSessions()).isZero();
+    }
+
+    @Test
+    void aNonBooleanTrackingFlagIsRejected() throws Exception {
+        FakeConnection connection = connect("a");
+        service.text(connection, "{\"type\":\"start\",\"version\":1,\"modelKey\":\"yolo11n\",\"tracking\":\"bytetrack\"}");
+
+        assertThat(last(connection).path("code").asText()).isEqualTo("INVALID_MESSAGE");
+        assertThat(connection.closeCode).isEqualTo(1008);
+        assertThat(worker.endedSessions).isEmpty();
     }
 
     @Test

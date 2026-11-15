@@ -19,6 +19,8 @@ import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.DetectionSourceType;
 import com.yolovision.entity.ModelConfig;
+import com.yolovision.entity.ProcessingMode;
+import com.yolovision.entity.TrackingSummary;
 import com.yolovision.repository.DetectionJobOutboxRepository;
 import com.yolovision.repository.DetectionJobRepository;
 import com.yolovision.repository.DetectionResultRepository;
@@ -120,6 +122,53 @@ class DetectionApiIntegrationTest {
         assertThat(job.getConfidence()).isEqualByComparingTo("0.400");
         assertThat(job.getSelectedClasses()).containsExactly(2, 7);
         assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1")).isPresent();
+    }
+
+    @Test
+    void trackingModeIsPersistedReturnedAndSentToTheWorker() throws Exception {
+        String body = mockMvc.perform(post("/api/v1/detections").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"videoUrl\":\"" + VIDEO + "\",\"modelKey\":\"yolo11n\","
+                                + "\"processingMode\":\"DETECTION_TRACKING\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.processingMode").value("DETECTION_TRACKING"))
+                .andReturn().getResponse().getContentAsString();
+        UUID jobId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(body, "$.jobId"));
+
+        entityManager.flush();
+        assertThat(jobs.findById(jobId).orElseThrow().getProcessingMode()).isEqualTo(ProcessingMode.DETECTION_TRACKING);
+        assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow().getPayload()
+                .path("processingMode").asText()).isEqualTo("DETECTION_TRACKING");
+        mockMvc.perform(get("/api/v1/detections/" + jobId))
+                .andExpect(jsonPath("$.processingMode").value("DETECTION_TRACKING"));
+        mockMvc.perform(get("/api/v1/detections"))
+                .andExpect(jsonPath("$.content[0].processingMode").value("DETECTION_TRACKING"));
+    }
+
+    @Test
+    void requestsWithoutAProcessingModeAreDetectionOnlyAndSendTheOriginalCommand() throws Exception {
+        String body = mockMvc.perform(post("/api/v1/detections").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"videoUrl\":\"" + VIDEO + "\",\"modelKey\":\"yolo11n\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.processingMode").value("DETECTION_ONLY"))
+                .andReturn().getResponse().getContentAsString();
+        UUID jobId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(body, "$.jobId"));
+
+        entityManager.flush();
+        assertThat(jobs.findById(jobId).orElseThrow().getProcessingMode()).isEqualTo(ProcessingMode.DETECTION_ONLY);
+        assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow().getPayload()
+                .has("processingMode")).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\"BOT_SORT\"", "\"detection_tracking\"", "\"\""})
+    void unsupportedProcessingModesAreFieldErrors(String mode) throws Exception {
+        mockMvc.perform(post("/api/v1/detections").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"videoUrl\":\"" + VIDEO + "\",\"modelKey\":\"yolo11n\",\"processingMode\":"
+                                + mode + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_DETECTION_REQUEST"))
+                .andExpect(jsonPath("$.errors.processingMode").isNotEmpty());
+        assertThat(outbox.count()).isZero();
     }
 
     @ParameterizedTest
@@ -410,6 +459,32 @@ class DetectionApiIntegrationTest {
                 .andExpect(jsonPath("$.resultMetadataAvailable").value(true))
                 .andReturn().getResponse().getContentAsString();
         assertThat(body).doesNotContain("detections/", "minio", "http");
+        assertThat(com.jayway.jsonpath.JsonPath.<String>read(body, "$.processingMode")).isEqualTo("DETECTION_ONLY");
+        assertThat(body).contains("\"tracking\":null");
+    }
+
+    @Test
+    void trackingResultsReportTrackTotalsSeparatelyFromDetectionEvents() throws Exception {
+        DetectionJob job = job(yolo11n, DetectionJobStatus.COMPLETED, 100);
+        job.setProcessingMode(ProcessingMode.DETECTION_TRACKING);
+        jobs.saveAndFlush(job);
+        DetectionResult result = new DetectionResult(job, "detections/" + job.getId() + "/detected.mp4",
+                Map.of("car", 300L));
+        result.setTotalFrames(150);
+        result.setTrackingSummary(new TrackingSummary("bytetrack", 6, 4, 310, Map.of("car", 6L)));
+        results.saveAndFlush(result);
+
+        mockMvc.perform(get("/api/v1/detections/" + job.getId() + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.processingMode").value("DETECTION_TRACKING"))
+                .andExpect(jsonPath("$.totalDetections").value(300))
+                .andExpect(jsonPath("$.countSemantics").value("BOUNDING_BOX_DETECTIONS_ACROSS_FRAMES"))
+                .andExpect(jsonPath("$.tracking.tracker").value("bytetrack"))
+                .andExpect(jsonPath("$.tracking.uniqueTrackIds").value(6))
+                .andExpect(jsonPath("$.tracking.maxActiveTracks").value(4))
+                .andExpect(jsonPath("$.tracking.trackedDetections").value(310))
+                .andExpect(jsonPath("$.tracking.uniqueTrackIdsByClass.car").value(6))
+                .andExpect(jsonPath("$.tracking.countSemantics").value("TRACK_IDS_ASSIGNED_BY_BYTETRACK"));
     }
 
     @ParameterizedTest

@@ -8,6 +8,7 @@ import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobOutboxMessage;
 import com.yolovision.entity.DetectionSourceType;
 import com.yolovision.entity.ModelConfig;
+import com.yolovision.entity.ProcessingMode;
 import com.yolovision.exception.DetectionModelUnavailableException;
 import com.yolovision.exception.InvalidDetectionJobException;
 import com.yolovision.repository.DetectionJobOutboxRepository;
@@ -82,17 +83,20 @@ public class DetectionJobSubmissionService {
         // YouTube sources are stored canonically (https://www.youtube.com/watch?v=<id>).
         String source = request.sourceType() == DetectionSourceType.YOUTUBE_URL
                 ? YouTubeVideoUrl.canonicalize(request.source().strip()) : request.source().strip();
+        ProcessingMode mode = request.processingMode() == null ? ProcessingMode.DETECTION_ONLY : request.processingMode();
         DetectionJob job = new DetectionJob(model, source, confidence, imageSize, classes);
         job.setSourceType(request.sourceType());
+        job.setProcessingMode(mode);
         jobs.saveAndFlush(job);
 
+        // The mode travels in the same outbox command; the worker performs the tracking.
         DetectionCommandMessage command = new DetectionCommandMessage(
                 DetectionCommandMessage.SCHEMA_VERSION, UUID.randomUUID(), job.getId(), model.getModelKey(),
-                job.getSourceType(), job.getVideoUrl(), confidence, imageSize, classes, job.getCreatedAt());
+                job.getSourceType(), job.getVideoUrl(), confidence, imageSize, classes, job.getCreatedAt(), mode);
         outbox.save(new DetectionJobOutboxMessage(command.messageId(), job.getId(),
                 DetectionCommandMessage.MESSAGE_TYPE, serialize(command)));
-        LOG.info("Detection job {} created with model {} (source type {}); command {} queued in outbox",
-                job.getId(), model.getModelKey(), job.getSourceType(), command.messageId());
+        LOG.info("Detection job {} created with model {} (source type {}, {}); command {} queued in outbox",
+                job.getId(), model.getModelKey(), job.getSourceType(), mode, command.messageId());
         return job.getId();
     }
 

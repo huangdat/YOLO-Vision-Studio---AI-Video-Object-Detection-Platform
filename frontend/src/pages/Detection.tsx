@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Alert, Disclosure, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { ClassSelector } from "../components/workspace/ClassSelector";
 import { ConfidenceControl, ImageSizeSelector } from "../components/workspace/DetectionSettings";
+import { TrackingToggle } from "../components/workspace/TrackingToggle";
 import { ModelSelector } from "../components/workspace/ModelSelector";
 import { VideoSourceField } from "../components/workspace/VideoSourceField";
 import { useApiResource } from "../hooks/useApiResource";
@@ -330,6 +331,11 @@ export function Detection() {
               </div>
             </div>
           </Disclosure>
+          <TrackingToggle
+            checked={form.tracking}
+            disabled={submitting}
+            onChange={(value) => update("tracking", value)}
+          />
         </section>
 
         <section className="step step-submit" aria-labelledby="start-title">

@@ -7,6 +7,8 @@ import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.ModelConfig;
+import com.yolovision.entity.ProcessingMode;
+import com.yolovision.entity.TrackingSummary;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -24,10 +26,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /** Executes real production migrations and database checks on disposable PostgreSQL 17. */
@@ -53,8 +55,8 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
     @Test
     void productionMigrationsValidateAndRerunningDoesNotReapplySeeds() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
-        assertThat(flyway.info().applied()).hasSize(7);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(flyway.info().applied()).hasSize(8);
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -159,6 +161,42 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
         assertSqlState(() -> jdbc.update("UPDATE detection_jobs SET source_type = 'FTP' WHERE id = ?",
                 job.getId()), "23514");
+    }
+
+    @Test
+    void trackingMigrationDefaultsExistingJobsToDetectionOnlyAndRejectsUnknownModes() {
+        DetectionJob job = persistedJob();
+        jdbc.update("UPDATE detection_jobs SET processing_mode = DEFAULT WHERE id = ?", job.getId());
+        assertThat(jdbc.queryForObject("SELECT processing_mode FROM detection_jobs WHERE id = ?", String.class,
+                job.getId())).isEqualTo("DETECTION_ONLY");
+        assertColumnType("detection_results", "tracking_summary", "jsonb");
+
+        assertSqlState(() -> jdbc.update("UPDATE detection_jobs SET processing_mode = 'OFFLINE' WHERE id = ?",
+                job.getId()), "23514");
+    }
+
+    @Test
+    void trackingSummaryIsStoredAsAJsonbObjectAndIsOptional() {
+        DetectionJob job = persistedJob();
+        job.setProcessingMode(ProcessingMode.DETECTION_TRACKING);
+        jobs.saveAndFlush(job);
+        DetectionResult result = new DetectionResult(job, "results/output.mp4", Map.of("car", 90L));
+        result.setTrackingSummary(new TrackingSummary("bytetrack", 4, 3, 85, Map.of("car", 4L)));
+        results.saveAndFlush(result);
+        DetectionResult legacy = results.saveAndFlush(
+                new DetectionResult(persistedJob(), "results/legacy.mp4", Map.of()));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT (tracking_summary ->> 'uniqueTrackIds')::bigint FROM detection_results WHERE id = ?",
+                Long.class, result.getId())).isEqualTo(4L);
+        assertThat(jdbc.queryForObject(
+                "SELECT tracking_summary IS NULL FROM detection_results WHERE id = ?",
+                Boolean.class, legacy.getId())).isTrue();
+        entityManager.clear();
+        assertThat(results.findById(result.getId()).orElseThrow().getTrackingSummary().uniqueTrackIdsByClass())
+                .containsEntry("car", 4L);
+        assertSqlState(() -> jdbc.update(
+                "UPDATE detection_results SET tracking_summary = '[]'::jsonb WHERE id = ?", result.getId()), "23514");
     }
 
     @Test

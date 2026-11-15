@@ -60,7 +60,7 @@ sequenceDiagram
 
 | Message | Fields |
 | --- | --- |
-| `start` | `version` (1), `modelKey`, `confidence` (0–1, ≤ 3 decimals, default 0.25), `imageSize` (320, 416, or 640, default 416), `classes` (1–80 unique COCO IDs 0–79, default vehicles `[1,2,3,5,7]`) |
+| `start` | `version` (1), `modelKey`, `confidence` (0–1, ≤ 3 decimals, default 0.25), `imageSize` (320, 416, or 640, default 416), `classes` (1–80 unique COCO IDs 0–79, default vehicles `[1,2,3,5,7]`), optional `tracking` (boolean, default `false`) |
 | binary frame | 4-byte big-endian unsigned `frameId`, followed by the JPEG bytes. At most `maxFrameBytes` |
 | `stop` | none |
 
@@ -68,8 +68,8 @@ sequenceDiagram
 
 | Message | Fields |
 | --- | --- |
-| `ready` | `version`, `sessionId`, `modelKey`, `maxFps`, `maxFrameBytes`, `maxInFlight` (1), `imageSize`, `confidence`, `classes` |
-| `detections` | `frameId`, `width`, `height` (the submitted frame), `detections[]` of `{classId, label, confidence, box: [x1, y1, x2, y2]}` in **submitted-frame pixels**, `inferenceMs`, `serverMs` |
+| `ready` | `version`, `sessionId`, `modelKey`, `maxFps`, `maxFrameBytes`, `maxInFlight` (1), `imageSize`, `confidence`, `classes`, `tracking`, and `tracker` (`"bytetrack"`, tracking sessions only) |
+| `detections` | `frameId`, `width`, `height` (the submitted frame), `detections[]` of `{classId, label, confidence, box: [x1, y1, x2, y2]}` in **submitted-frame pixels**, `inferenceMs`, `serverMs`. Tracking sessions add `tracking: true`, `activeTracks`, and `trackId` on each detection with a confirmed track |
 | `dropped` | `frameId`, `reason`: `BUSY` (another frame in flight) or `RATE_LIMITED` (faster than `maxFps`). Releases the client's in-flight slot |
 | `error` | `code`, `message` (fixed, client-safe), `fatal` (boolean), optional `frameId` |
 | `stopped` | `reason` (`CLIENT_STOP`, `IDLE_TIMEOUT`, `MAX_DURATION`, `SERVER_SHUTDOWN`), `processedFrames`, `droppedFrames` |
@@ -79,8 +79,8 @@ sequenceDiagram
 | Category | Codes |
 | --- | --- |
 | Setup | `INVALID_MESSAGE`, `UNSUPPORTED_VERSION`, `INVALID_SETTINGS` (with `errors`), `MODEL_NOT_FOUND`, `MODEL_DISABLED`, `MODEL_NOT_SUPPORTED`, `MODEL_NOT_PREPARED`, `SESSION_LIMIT_REACHED`, `ALREADY_STARTED`, `NOT_STARTED` |
-| Frames | `INVALID_FRAME`, `FRAME_TOO_LARGE` |
-| Inference | `WORKER_UNAVAILABLE`, `INFERENCE_TIMEOUT`, `INFERENCE_FAILED` |
+| Frames | `INVALID_FRAME`, `FRAME_TOO_LARGE`, `FRAME_OUT_OF_ORDER` (tracking) |
+| Inference | `WORKER_UNAVAILABLE`, `INFERENCE_TIMEOUT`, `INFERENCE_FAILED`, `TRACKING_CAPACITY`, `SESSION_ENDED` (tracking) |
 
 Setup errors and `SESSION_LIMIT_REACHED` are fatal: the server sends the error, then closes. Per-frame errors are not fatal, so the client may continue.
 
@@ -95,7 +95,7 @@ Setup errors and `SESSION_LIMIT_REACHED` are fatal: the server sends the error, 
 
 Any close, including an unexpected disconnect, releases the session immediately.
 
-**Tracking extension (future):** detections may later carry an optional `trackId`, and `stopped` may add per-session statistics. Tracker state would be scoped to one `sessionId` and discarded with it.
+**Tracking:** with `tracking: true`, the worker runs ByteTrack with state scoped to this `sessionId`, and the state is discarded when the session ends. Track IDs are forwarded exactly as the worker assigned them. Detection-only sessions keep the original message shape. See [object-tracking.md](object-tracking.md).
 
 ## 4. Internal worker contract (not published to the host)
 
@@ -103,7 +103,8 @@ Any close, including an unexpected disconnect, releases the session immediately.
 | --- | --- |
 | `GET /health` | Liveness (shared with the other worker images) |
 | `POST /internal/live/models/{modelKey}/load` | Validates and loads a prepared model; returns `{modelKey, device, classes}` |
-| `POST /internal/live/infer?modelKey=&frameId=&confidence=&imageSize=&classes=1,2,3` | Body: raw JPEG (`Content-Type: image/jpeg`). Returns `{frameId, width, height, detections[], inferenceMs, modelKey}` |
+| `POST /internal/live/infer?modelKey=&frameId=&confidence=&imageSize=&classes=1,2,3[&tracking=true&sessionId=]` | Body: raw JPEG (`Content-Type: image/jpeg`). Returns `{frameId, width, height, detections[], inferenceMs, modelKey}`. With tracking it adds `tracking`, `activeTracks`, and `trackId` (or `null`) per detection |
+| `DELETE /internal/live/sessions/{sessionId}` | Releases that session's tracking state. Idempotent, 204 |
 
 Errors are `{"error": {"code": "...", "message": "..."}}`:
 
@@ -111,9 +112,9 @@ Errors are `{"error": {"code": "...", "message": "..."}}`:
 | --- | --- |
 | 400 | `INVALID_FRAME`, `INVALID_PARAMETERS` |
 | 404 | `MODEL_NOT_SUPPORTED` |
-| 409 | `MODEL_NOT_PREPARED` |
+| 409 | `MODEL_NOT_PREPARED`, `FRAME_OUT_OF_ORDER`, `SESSION_ENDED` |
 | 413 | `FRAME_TOO_LARGE` |
-| 429 | `WORKER_BUSY` |
+| 429 | `WORKER_BUSY`, `TRACKING_CAPACITY` |
 | 500 | `INFERENCE_FAILED` |
 | 503 | `MODEL_LOAD_FAILED` |
 

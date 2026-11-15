@@ -5,13 +5,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.yolovision.config.LiveDetectionProperties;
-import com.yolovision.dto.live.LiveMessages;
 import com.yolovision.dto.live.LiveMessages.Detections;
 import com.yolovision.dto.live.LiveMessages.Dropped;
 import com.yolovision.dto.live.LiveMessages.Ready;
 import com.yolovision.dto.live.LiveMessages.StartRequest;
 import com.yolovision.dto.live.LiveMessages.Stopped;
 import com.yolovision.dto.live.LiveMessages.WorkerResult;
+import com.yolovision.dto.live.LiveMessages;
 import com.yolovision.entity.ModelConfig;
 import com.yolovision.repository.ModelConfigRepository;
 import com.yolovision.service.LiveWorkerClient.LiveWorkerException;
@@ -93,7 +93,7 @@ public class LiveDetectionService {
         }
     }
 
-    record Settings(String modelKey, BigDecimal confidence, int imageSize, List<Integer> classes) {
+    record Settings(String modelKey, BigDecimal confidence, int imageSize, List<Integer> classes, boolean tracking) {
     }
 
     private final LiveDetectionProperties properties;
@@ -225,11 +225,11 @@ public class LiveDetectionService {
                     session.startedNanos = now;
                     session.lastActivityNanos = now;
                     session.state = State.ACTIVE;
-                    LOG.info("Live session {} started: model {}, {} px, {} classes", session.sessionId,
-                            settings.modelKey(), settings.imageSize(), settings.classes().size());
+                    LOG.info("Live session {} started: model {}, {} px, {} classes, tracking {}", session.sessionId,
+                            settings.modelKey(), settings.imageSize(), settings.classes().size(), settings.tracking());
                     session.connection.send(new Ready(session.sessionId, settings.modelKey(), properties.maxFps(),
                             properties.maxFrameBytes(), settings.imageSize(), settings.confidence(),
-                            settings.classes()));
+                            settings.classes(), settings.tracking()));
                 });
         session.pending = load;
     }
@@ -259,7 +259,9 @@ public class LiveDetectionService {
         if (invalid) {
             errors.put("classes", "must contain 1-80 unique COCO class IDs between 0 and 79");
         }
-        return new Settings(modelKey, confidence.stripTrailingZeros(), imageSize, List.copyOf(unique));
+        // Tracking state lives in the worker, keyed by this session's server-generated ID.
+        boolean tracking = Boolean.TRUE.equals(request.tracking());
+        return new Settings(modelKey, confidence.stripTrailingZeros(), imageSize, List.copyOf(unique), tracking);
     }
 
     // Frames ------------------------------------------------------------------------------------
@@ -306,7 +308,7 @@ public class LiveDetectionService {
         CompletableFuture<WorkerResult> call;
         try {
             call = worker.infer(jpeg, frameId, settings.modelKey(), settings.confidence().toPlainString(),
-                    settings.imageSize(), settings.classes());
+                    settings.imageSize(), settings.classes(), settings.tracking() ? session.sessionId : null);
         } catch (RuntimeException exception) {
             call = CompletableFuture.failedFuture(exception);
         }
@@ -334,8 +336,17 @@ public class LiveDetectionService {
             }
             session.processed.incrementAndGet();
             long serverMs = TimeUnit.NANOSECONDS.toMillis(nanoTime.getAsLong() - started);
-            session.connection.send(new Detections(frameId, result.width(), result.height(),
-                    result.detections() == null ? List.of() : result.detections(), result.inferenceMs(), serverMs));
+            List<LiveMessages.Detection> detections = result.detections() == null ? List.of() : result.detections();
+            if (settings.tracking()) {
+                // Track IDs are forwarded exactly as the worker assigned them; none are invented here.
+                session.connection.send(new Detections(frameId, result.width(), result.height(), detections,
+                        result.inferenceMs(), serverMs, result.activeTracks() == null ? 0 : result.activeTracks()));
+            } else {
+                // Detection Only: the original message shape, without any tracking fields.
+                session.connection.send(new Detections(frameId, result.width(), result.height(),
+                        detections.stream().map(LiveDetectionService::withoutTrackId).toList(), result.inferenceMs(),
+                        serverMs));
+            }
         });
     }
 
@@ -370,6 +381,21 @@ public class LiveDetectionService {
         if (session.holdsSlot.compareAndSet(true, false)) {
             capacity.release();
         }
+        Settings settings = session.settings;
+        if (settings != null && settings.tracking()
+                && (previous == State.ACTIVE || previous == State.STARTING)) {
+            // Stop, disconnect, timeout, error, or shutdown: the worker drops this session's tracks.
+            try {
+                worker.endTrackingSession(session.sessionId).exceptionally(failure -> {
+                    LOG.debug("Tracking state of live session {} could not be released now; it expires in the worker",
+                            session.sessionId);
+                    return null;
+                });
+            } catch (RuntimeException exception) {
+                LOG.debug("Tracking cleanup for live session {} failed: {}", session.sessionId,
+                        exception.getClass().getSimpleName());
+            }
+        }
         if (previous == State.ACTIVE || previous == State.STARTING) {
             LOG.info("Live session {} ended ({}): {} frames processed, {} dropped", session.sessionId, reason,
                     session.processed.get(), session.dropped.get());
@@ -402,6 +428,12 @@ public class LiveDetectionService {
                 release(session, "shutdown");
             }
         }
+    }
+
+    private static LiveMessages.Detection withoutTrackId(LiveMessages.Detection detection) {
+        return detection.trackId() == null ? detection
+                : new LiveMessages.Detection(detection.classId(), detection.label(), detection.confidence(),
+                        detection.box());
     }
 
     private static LiveWorkerException unwrap(Throwable failure) {

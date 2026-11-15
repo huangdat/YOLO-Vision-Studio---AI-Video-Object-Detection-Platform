@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, field_validator, model_validator
 
 from app.schemas.base import EngineSchema
-from app.schemas.detection import SourceType
+from app.schemas.detection import ProcessingMode, SourceType
 
 SCHEMA_VERSION = 1
 COMMAND_MESSAGE_TYPE = "detection.execute.v1"
@@ -36,6 +36,9 @@ class DetectionCommand(EngineSchema):
     image_size: int = Field(ge=32, le=4096, multiple_of=32)
     classes: list[Annotated[int, Field(ge=0, le=9999, strict=True)]] = Field(min_length=1, max_length=100)
     created_at: datetime
+    # Optional and additive: commands without it (all commands before tracking existed, and
+    # detection-only commands, which omit it) are processed exactly as before.
+    processing_mode: ProcessingMode = ProcessingMode.DETECTION_ONLY
 
     @field_validator("classes")
     @classmethod
@@ -62,12 +65,24 @@ class WorkerJobStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class EventTracking(EngineSchema):
+    """Compact tracking totals for the backend; the full per-track data is in result.json."""
+
+    tracker: Literal["bytetrack"] = "bytetrack"
+    unique_track_ids: int = Field(ge=0)
+    max_active_tracks: int = Field(ge=0)
+    tracked_detections: int = Field(ge=0)
+    unique_track_ids_by_class: dict[Annotated[str, Field(min_length=1, max_length=128)], Annotated[int, Field(ge=0)]]
+
+
 class EventResult(EngineSchema):
     output_video_key: str = Field(min_length=1, max_length=1024)
     result_json_key: str = Field(min_length=1, max_length=1024)
     total_frames: int = Field(ge=0)
     processing_time_ms: int = Field(ge=0)
     detection_summary: dict[Annotated[str, Field(min_length=1, max_length=128)], Annotated[int, Field(ge=0)]]
+    processing_mode: ProcessingMode | None = None
+    tracking: EventTracking | None = None
 
 
 class EventError(EngineSchema):

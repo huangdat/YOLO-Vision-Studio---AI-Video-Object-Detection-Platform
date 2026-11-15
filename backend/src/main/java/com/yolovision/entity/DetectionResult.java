@@ -60,6 +60,11 @@ public class DetectionResult {
     @Column(name = "detection_summary", nullable = false, columnDefinition = "jsonb")
     private Map<@NotBlank String, @NotNull @PositiveOrZero Long> detectionSummary;
 
+    /** Tracking totals; null for detection-only results (including every legacy result). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tracking_summary", columnDefinition = "jsonb")
+    private TrackingSummary trackingSummary;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -79,6 +84,14 @@ public class DetectionResult {
 
     public UUID getId() {
         return id;
+    }
+
+    public TrackingSummary getTrackingSummary() {
+        return trackingSummary;
+    }
+
+    public void setTrackingSummary(TrackingSummary trackingSummary) {
+        this.trackingSummary = trackingSummary;
     }
 
     public DetectionJob getJob() {

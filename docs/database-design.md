@@ -110,7 +110,7 @@ Results contain storage references and detection statistics. A database row does
 | `detection_summary` | `JSONB` | Required JSON object containing detection statistics |
 | `created_at` | `TIMESTAMPTZ` | Required creation instant; defaults to `CURRENT_TIMESTAMP` |
 
-The summary maps class names to detection totals using `Map<String, Long>`, for example `{"car": 120, "motorcycle": 45}`. These are detections, not unique vehicles or unique tracked objects. A single object appearing in many frames can contribute many detections. Unique object counting requires tracking in a future phase.
+The summary maps class names to detection totals using `Map<String, Long>`, for example `{"car": 120, "motorcycle": 45}`. These are detections, not unique vehicles or unique tracked objects. A single object appearing in many frames can contribute many detections. Tracking jobs (`detection_jobs.processing_mode = 'DETECTION_TRACKING'`, Flyway V8) also store ByteTrack totals in `detection_results.tracking_summary` (JSONB, `NULL` for detection-only results). Those are Track IDs assigned within the job, not a guaranteed count of physical objects. See [object-tracking.md](object-tracking.md).
 
 ## Referential integrity and constraints
 

@@ -49,7 +49,8 @@ Controllers never change job status. Status transitions belong to the Phase 05 l
   "modelKey": "yolo11n",
   "confidence": 0.25,
   "imageSize": 640,
-  "classes": [1, 2, 3, 5, 7]
+  "classes": [1, 2, 3, 5, 7],
+  "processingMode": "DETECTION_TRACKING"
 }
 ```
 
@@ -60,6 +61,7 @@ Controllers never change job status. Status transitions belong to the Phase 05 l
 | `confidence` | no | 0–1, at most 3 decimals | `0.25` |
 | `imageSize` | no | 32–4096 and a multiple of 32 | `960` |
 | `classes` | no | 1–100 unique integers 0–9999, validated against the loaded model by the worker | `[1,2,3,5,7]` (COCO bicycle, car, motorcycle, bus, truck) |
+| `processingMode` | no | `DETECTION_ONLY` or `DETECTION_TRACKING` (ByteTrack, see [object-tracking.md](object-tracking.md)) | `DETECTION_ONLY` |
 
 Any other property, such as `sourceType` or `source`, is rejected. The public API never accepts local paths or arbitrary URLs. Local-file jobs exist only through the development harness (`SPRING_PROFILES_ACTIVE=dev-harness`), which is not active by default.
 
@@ -149,6 +151,7 @@ Results are sorted by `createdAt` descending, then `jobId` descending for a stab
 ```
 
 - **Counts are bounding-box detections summed over all processed frames, not unique objects.** A bus visible in 60 frames counts 60 times.
+- `processingMode` is reported on job details, history rows, the 202 response, and the result. For `DETECTION_TRACKING` jobs, `tracking` holds `{tracker, uniqueTrackIds, maxActiveTracks, trackedDetections, uniqueTrackIdsByClass, countSemantics: "TRACK_IDS_ASSIGNED_BY_BYTETRACK"}`. It is `null` otherwise. Unique track IDs are IDs assigned within the job, not a guaranteed count of physical objects.
 - All values come from the persisted `DetectionResult`.
 - Object keys and MinIO locations are not exposed. `outputVideoAvailable` only reports that an annotated-video key was recorded. The artifacts themselves are served by the Phase 09 endpoints in [video-preview-download.md](video-preview-download.md).
 

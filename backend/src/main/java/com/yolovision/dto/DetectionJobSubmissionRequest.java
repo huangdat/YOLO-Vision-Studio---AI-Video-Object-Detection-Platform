@@ -1,6 +1,7 @@
 package com.yolovision.dto;
 
 import com.yolovision.entity.DetectionSourceType;
+import com.yolovision.entity.ProcessingMode;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -16,6 +17,7 @@ import java.util.List;
 /**
  * Internal submission input (no public endpoint until Phase 06). Null confidence,
  * image size, or classes select the engine defaults: 0.25, 960, and COCO vehicle classes.
+ * A null processing mode means DETECTION_ONLY.
  */
 public record DetectionJobSubmissionRequest(
         @NotBlank @Pattern(regexp = "^[a-z0-9][a-z0-9_-]{0,63}$", message = "must be a registered model key")
@@ -24,5 +26,11 @@ public record DetectionJobSubmissionRequest(
         @NotBlank @Size(max = 2048) String source,
         @DecimalMin("0.0") @DecimalMax("1.0") @Digits(integer = 1, fraction = 3) BigDecimal confidence,
         @Min(32) @Max(4096) Integer imageSize,
-        @Size(min = 1, max = 100) List<@NotNull @Min(0) @Max(9999) Integer> classes) {
+        @Size(min = 1, max = 100) List<@NotNull @Min(0) @Max(9999) Integer> classes,
+        ProcessingMode processingMode) {
+
+    public DetectionJobSubmissionRequest(String modelKey, DetectionSourceType sourceType, String source,
+            BigDecimal confidence, Integer imageSize, List<Integer> classes) {
+        this(modelKey, sourceType, source, confidence, imageSize, classes, null);
+    }
 }

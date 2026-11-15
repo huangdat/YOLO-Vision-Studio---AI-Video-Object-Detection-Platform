@@ -2,6 +2,7 @@ package com.yolovision.dto;
 
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionSourceType;
+import com.yolovision.entity.ProcessingMode;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -27,7 +28,8 @@ public record DetectionJobDetailsResponse(
         Instant completedAt,
         Instant updatedAt,
         String errorCode,
-        String errorMessage) {
+        String errorMessage,
+        ProcessingMode processingMode) {
 
     public DetectionJobDetailsResponse {
         classes = List.copyOf(classes);

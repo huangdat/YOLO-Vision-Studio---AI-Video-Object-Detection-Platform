@@ -6,6 +6,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Alert, Disclosure, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { ClassSelector } from "../components/workspace/ClassSelector";
 import { ConfidenceControl, ImageSizeSelector } from "../components/workspace/DetectionSettings";
+import { TrackingToggle } from "../components/workspace/TrackingToggle";
 import { useApiResource } from "../hooks/useApiResource";
 import { useLiveDetection, type LiveDependencies } from "../hooks/useLiveDetection";
 import { VEHICLE_CLASS_IDS } from "../lib/cocoClasses";
@@ -36,6 +37,7 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
   const [classes, setClasses] = useState<number[]>([...VEHICLE_CLASS_IDS]);
   const [confidence, setConfidence] = useState(DEFAULT_CONFIDENCE.toFixed(2));
   const [imageSize, setImageSize] = useState<number>(LIVE_DEFAULT_IMAGE_SIZE);
+  const [tracking, setTracking] = useState(false);
   const cameraSelectId = useId();
   const modelSelectId = useId();
 
@@ -56,7 +58,7 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
 
   const start = () => {
     if (!canStart || parsedConfidence === null) return;
-    void live.start({ modelKey, confidence: parsedConfidence, imageSize, classes });
+    void live.start({ modelKey, confidence: parsedConfidence, imageSize, classes, tracking });
   };
 
   const statusText = live.phase === "starting"
@@ -102,6 +104,11 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
           <div><dt>Frames</dt><dd>{live.metrics.processed}</dd></div>
           <div><dt>Dropped</dt><dd>{live.metrics.dropped}</dd></div>
           <div><dt>Objects</dt><dd>{running ? live.metrics.detections : "—"}</dd></div>
+          {running && live.tracking && (
+            <div className="live-track-count">
+              <dt>Active tracks</dt><dd>{live.metrics.activeTracks ?? 0}</dd>
+            </div>
+          )}
         </dl>
 
         {live.notice && (
@@ -182,6 +189,13 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
         <div className="live-classes">
           <ClassSelector selected={classes} disabled={busy} onChange={setClasses} />
         </div>
+
+        <TrackingToggle
+          checked={tracking}
+          disabled={busy}
+          onChange={setTracking}
+          description="Assign persistent IDs to detected objects across camera frames. IDs start fresh with every session."
+        />
 
         <Disclosure
           label="Advanced settings"

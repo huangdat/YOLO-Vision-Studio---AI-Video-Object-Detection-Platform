@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.yolovision.dto.messaging.DetectionEventMessage;
 import com.yolovision.dto.messaging.DetectionEventStatus;
+import com.yolovision.entity.ProcessingMode;
 import com.yolovision.exception.UnknownDetectionJobException;
 import com.yolovision.service.DetectionJobLifecycleService;
 import jakarta.validation.Validation;
@@ -75,8 +76,34 @@ class DetectionJobEventConsumerTest {
         verify(lifecycle).apply(any());
     }
 
+    @Test
+    void trackingCompletionsFromThePythonWorkerAreDeserialised() {
+        when(lifecycle.apply(any())).thenReturn(DetectionJobLifecycleService.Outcome.APPLIED);
+
+        consumer.onEvent(message("""
+                {"schemaVersion":1,"eventId":"%s","jobId":"%s","status":"COMPLETED","progress":100,
+                 "timestamp":"2026-11-08T00:00:00Z","modelKey":"yolo11n",
+                 "result":{"outputVideoKey":"detections/%s/detected.mp4","resultJsonKey":"detections/%s/result.json",
+                 "totalFrames":150,"processingTimeMs":45000,"detectionSummary":{"car":120},
+                 "processingMode":"DETECTION_TRACKING",
+                 "tracking":{"tracker":"bytetrack","uniqueTrackIds":4,"maxActiveTracks":3,"trackedDetections":118,
+                 "uniqueTrackIdsByClass":{"car":4}}}}"""
+                .formatted(EVENT, JOB, JOB, JOB)));
+
+        ArgumentCaptor<DetectionEventMessage> captor = ArgumentCaptor.forClass(DetectionEventMessage.class);
+        verify(lifecycle).apply(captor.capture());
+        DetectionEventMessage.Result result = captor.getValue().result();
+        assertThat(result.processingMode()).isEqualTo(ProcessingMode.DETECTION_TRACKING);
+        assertThat(result.tracking().uniqueTrackIds()).isEqualTo(4L);
+        assertThat(result.tracking().uniqueTrackIdsByClass()).containsEntry("car", 4L);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
+        // a tracker other than ByteTrack
+        "{\"schemaVersion\":1,\"eventId\":\"" + EVENT + "\",\"jobId\":\"" + JOB + "\",\"status\":\"COMPLETED\",\"progress\":100,\"modelKey\":\"yolo26s\",\"timestamp\":\"2026-11-08T00:00:00Z\",\"result\":{\"outputVideoKey\":\"a\",\"resultJsonKey\":\"b\",\"totalFrames\":1,\"processingTimeMs\":1,\"detectionSummary\":{},\"tracking\":{\"tracker\":\"botsort\",\"uniqueTrackIds\":1,\"maxActiveTracks\":1,\"trackedDetections\":1,\"uniqueTrackIdsByClass\":{}}}}",
+        // negative tracking totals
+        "{\"schemaVersion\":1,\"eventId\":\"" + EVENT + "\",\"jobId\":\"" + JOB + "\",\"status\":\"COMPLETED\",\"progress\":100,\"modelKey\":\"yolo26s\",\"timestamp\":\"2026-11-08T00:00:00Z\",\"result\":{\"outputVideoKey\":\"a\",\"resultJsonKey\":\"b\",\"totalFrames\":1,\"processingTimeMs\":1,\"detectionSummary\":{},\"tracking\":{\"tracker\":\"bytetrack\",\"uniqueTrackIds\":-1,\"maxActiveTracks\":1,\"trackedDetections\":1,\"uniqueTrackIdsByClass\":{}}}}",
         "not json",
         "{}",
         "null",

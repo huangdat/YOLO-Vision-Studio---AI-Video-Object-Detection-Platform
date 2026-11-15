@@ -21,6 +21,7 @@ A longer walkthrough is on YouTube: [watch the full demo](https://youtu.be/3vpkP
 - **Dashboard and history**: job statistics, recent activity, and a filterable, paginated job history.
 - **Downloadable results**: annotated H.264 MP4 with boxes and labels, per-class counts, an in-app player with seeking, and MP4 and JSON downloads.
 - **Live Detection**: browser webcam frames analysed by a Nano model at up to 5 FPS, with boxes drawn over the preview and measured FPS and latency. Frames are never stored.
+- **Object tracking (ByteTrack)**: an opt-in mode for video jobs and Live Detection. Detections keep a persistent Track ID (`car #7 0.94`) with short trails, and results report unique track IDs next to detection counts.
 - **Reliable processing**: transactional outbox, at-least-once delivery, bounded retries, a dead-letter queue, and recovery of stalled jobs.
 
 ## System Architecture
@@ -61,7 +62,7 @@ Job lifecycle: `PENDING → QUEUED → DOWNLOADING → DETECTING → ENCODING �
 
 ## Object Tracking Methods
 
-YOLO Vision Studio currently performs **detection only**: every frame is analysed independently, so its statistics are detection events summed across frames, not unique objects. **Tracking** is the natural next step. It links detections across frames so each object keeps a persistent ID, which enables trajectories and unique counts. Tracking is not implemented yet; this section describes the design options.
+Detection analyses every frame independently, so its statistics are detection events summed across frames, not unique objects. **Tracking** links detections across frames so each object keeps a persistent ID. YOLO Vision Studio offers both: **Detection only** (the default) and **Detection + Tracking** with ByteTrack, switched on per video job or per Live Detection session.
 
 ![Detection per frame versus tracking with persistent IDs](docs/images/tracking-detection-vs-tracking.svg)
 
@@ -79,7 +80,12 @@ Common tracking-by-detection methods take YOLO boxes as input:
 
 ![SORT, DeepSORT, ByteTrack and BoT-SORT compared](docs/images/tracking-methods-overview.svg)
 
-**Recommendation for this project:** start with **ByteTrack**. It is online, needs no extra model (important on CPU), and Ultralytics ships it (`bytetrack.yaml`), so it can be added in the worker's inference loop. **BoT-SORT** (`botsort.yaml`) is the option for moving cameras or crowded scenes.
+**What this project uses: ByteTrack.** It is online, needs no extra model (important on CPU), and ships with Ultralytics.
+- **Per job and per session:** each video job and each live session gets its own tracker. The model weights stay shared, and track state is released when the job ends or the session stops.
+- **One forward pass for videos:** recorded videos are processed in a single pass, so this is online tracking, not offline.
+- **Detection counts are unchanged:** they mean the same as in Detection only. Unique track IDs are reported separately and approximate, but do not guarantee, the number of distinct objects, because occlusion can split or swap IDs.
+
+BoT-SORT, which adds camera-motion compensation, remains a possible later option for moving cameras or crowded scenes. Details, contracts, and limitations are in the [object tracking guide](docs/object-tracking.md).
 
 ## Quick Start
 
@@ -120,12 +126,12 @@ docs/             Technical guides and diagrams
 compose.yaml      Local stack (8 services); compose.production.yaml adds the hardened self-hosted layout
 ```
 
-Further reading: [architecture](docs/architecture.md) · [REST API](docs/detection-rest-api.md) · [asynchronous jobs](docs/asynchronous-job-processing.md) · [AI engine](docs/ai-detection-engine.md) · [Live Detection](docs/live-detection-architecture.md) · [operations runbook](docs/operations-runbook.md).
+Further reading: [architecture](docs/architecture.md) · [REST API](docs/detection-rest-api.md) · [asynchronous jobs](docs/asynchronous-job-processing.md) · [AI engine](docs/ai-detection-engine.md) · [Live Detection](docs/live-detection-architecture.md) · [object tracking](docs/object-tracking.md) · [operations runbook](docs/operations-runbook.md).
 
 ## Notes and Limitations
 
 - **No authentication.** Run it on localhost or a trusted network; public deployment needs authentication, rate limiting, and TLS.
-- **Detection events, not unique objects.** Without tracking, an object visible in many frames is counted in each frame.
+- **Detection events, not unique objects.** An object visible in many frames is counted in each frame. With tracking, unique track IDs are an approximation: long occlusions and crowded scenes can split or swap IDs.
 - **Models need preparation.** A catalog model is usable only after its weights are prepared and it is enabled.
 - **YouTube availability varies.** Private, restricted, and live videos fail.
 - **CPU by default.** Long or high-resolution videos take time; Live Detection allows one session at up to 5 FPS.

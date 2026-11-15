@@ -22,6 +22,8 @@ export interface LiveStartRequest {
   confidence: number;
   imageSize: number;
   classes: number[];
+  /** Ask the server to run ByteTrack for this session (optional; default false). */
+  tracking: boolean;
 }
 
 export interface LiveDetection {
@@ -30,6 +32,8 @@ export interface LiveDetection {
   confidence: number;
   /** [x1, y1, x2, y2] in pixels of the submitted frame. */
   box: [number, number, number, number];
+  /** ByteTrack ID from the worker, scoped to this session; null when no track is confirmed. */
+  trackId: number | null;
 }
 
 export interface LiveReady {
@@ -39,6 +43,8 @@ export interface LiveReady {
   maxFps: number;
   maxFrameBytes: number;
   maxInFlight: number;
+  /** True when the server runs ByteTrack for this session. */
+  tracking: boolean;
 }
 
 export interface LiveDetections {
@@ -49,6 +55,9 @@ export interface LiveDetections {
   detections: LiveDetection[];
   inferenceMs: number;
   serverMs: number;
+  tracking: boolean;
+  /** Tracks the worker reported as active in this frame; null in Detection Only sessions. */
+  activeTracks: number | null;
 }
 
 export interface LiveDropped {
@@ -86,11 +95,16 @@ function toDetection(value: unknown): LiveDetection | null {
   }
   const box = value.box;
   if (!Array.isArray(box) || box.length !== 4 || !box.every(isNumber)) return null;
+  const trackId = value.trackId;
+  if (trackId !== undefined && trackId !== null && !(isNumber(trackId) && Number.isInteger(trackId) && trackId >= 1)) {
+    return null;
+  }
   return {
     classId: value.classId,
     label: value.label,
     confidence: value.confidence,
     box: [box[0], box[1], box[2], box[3]],
+    trackId: trackId ?? null,
   };
 }
 
@@ -108,7 +122,7 @@ export function parseLiveMessage(raw: string): LiveServerMessage | null {
       return isString(data.sessionId) && isString(data.modelKey) && isNumber(data.maxFps) &&
         isNumber(data.maxFrameBytes) && isNumber(data.maxInFlight)
         ? { type: "ready", sessionId: data.sessionId, modelKey: data.modelKey, maxFps: data.maxFps,
-            maxFrameBytes: data.maxFrameBytes, maxInFlight: data.maxInFlight }
+            maxFrameBytes: data.maxFrameBytes, maxInFlight: data.maxInFlight, tracking: data.tracking === true }
         : null;
     case "detections": {
       if (!isNumber(data.frameId) || !isNumber(data.width) || !isNumber(data.height) ||
@@ -119,7 +133,9 @@ export function parseLiveMessage(raw: string): LiveServerMessage | null {
       if (detections.some((item) => item === null)) return null;
       return { type: "detections", frameId: data.frameId, width: data.width, height: data.height,
         detections: detections as LiveDetection[], inferenceMs: data.inferenceMs,
-        serverMs: isNumber(data.serverMs) ? data.serverMs : 0 };
+        serverMs: isNumber(data.serverMs) ? data.serverMs : 0,
+        tracking: data.tracking === true,
+        activeTracks: data.tracking === true && isNumber(data.activeTracks) ? data.activeTracks : null };
     }
     case "dropped":
       return isNumber(data.frameId) && (data.reason === "BUSY" || data.reason === "RATE_LIMITED")
@@ -166,6 +182,8 @@ const MESSAGES: Record<string, string> = {
     "The model is enabled but its weights are not prepared on the server. An administrator must prepare it first.",
   MODEL_LOAD_FAILED: "The live worker could not load the model.",
   SESSION_LIMIT_REACHED: "Another live session is already running. Stop it or try again later.",
+  TRACKING_CAPACITY: "The live worker is tracking too many sessions. Try again shortly.",
+  FRAME_OUT_OF_ORDER: "A frame arrived out of order and was skipped.",
   WORKER_UNAVAILABLE: "The live detection worker is not reachable. Check that the ai-live-worker service is running.",
   INFERENCE_TIMEOUT: "The live worker is responding slowly.",
   INFERENCE_FAILED: "Detection failed for a frame.",

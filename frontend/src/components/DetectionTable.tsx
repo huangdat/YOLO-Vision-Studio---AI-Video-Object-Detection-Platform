@@ -44,7 +44,12 @@ export function DetectionTable({
                   {shortId(job.jobId)}
                 </code>
               </td>
-              <td data-label="Model">{job.modelKey}</td>
+              <td data-label="Model">
+                {job.modelKey}
+                {job.processingMode === "DETECTION_TRACKING" && (
+                  <span className="tracking-tag" title="Detection + Tracking (ByteTrack)">Tracking</span>
+                )}
+              </td>
               <td data-label="Status">
                 <span className="status-cell">
                   <JobStatusBadge status={job.status} />

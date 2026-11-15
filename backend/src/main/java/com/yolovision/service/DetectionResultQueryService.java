@@ -4,6 +4,7 @@ import com.yolovision.dto.DetectionResultMetadataResponse;
 import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
+import com.yolovision.entity.TrackingSummary;
 import com.yolovision.exception.DetectionJobNotFoundException;
 import com.yolovision.exception.DetectionResultInconsistentException;
 import com.yolovision.exception.DetectionResultNotReadyException;
@@ -42,10 +43,15 @@ public class DetectionResultQueryService {
         });
         Map<String, Long> summary = result.getDetectionSummary() == null ? Map.of() : result.getDetectionSummary();
         long total = summary.values().stream().mapToLong(Long::longValue).sum();
+        TrackingSummary tracking = job.getProcessingMode().tracking() ? result.getTrackingSummary() : null;
         return new DetectionResultMetadataResponse(job.getId(), job.getStatus(), job.getModel().getModelKey(),
                 job.getModel().getVersion(), result.getTotalFrames(), total, result.getProcessingTimeMs(), summary,
                 DetectionResultMetadataResponse.FRAME_DETECTIONS, hasText(result.getOutputVideoKey()),
-                hasText(result.getResultJsonKey()), result.getCreatedAt(), job.getCompletedAt());
+                hasText(result.getResultJsonKey()), result.getCreatedAt(), job.getCompletedAt(),
+                job.getProcessingMode(), tracking == null ? null : new DetectionResultMetadataResponse.Tracking(
+                        tracking.tracker(), tracking.uniqueTrackIds(), tracking.maxActiveTracks(),
+                        tracking.trackedDetections(), tracking.uniqueTrackIdsByClass(),
+                        DetectionResultMetadataResponse.TRACK_IDS));
     }
 
     private static boolean hasText(String value) {

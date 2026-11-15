@@ -21,6 +21,8 @@ import type {
   DetectionProgressEvent,
   DetectionResultMetadata,
   DetectionSourceType,
+  ProcessingMode,
+  TrackingSummary,
 } from "../types/detections";
 
 const UUID_PATTERN =
@@ -29,6 +31,32 @@ const UUID_PATTERN =
 /** The backend identifies jobs by UUID; anything else can never match a job. */
 export function isJobId(value: string | undefined | null): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
+}
+
+/** Responses from backends without tracking support have no processingMode: Detection Only. */
+function processingMode(data: JsonRecord): ProcessingMode {
+  const value = data.processingMode;
+  if (value === undefined || value === null) return "DETECTION_ONLY";
+  if (value !== "DETECTION_ONLY" && value !== "DETECTION_TRACKING") invalid();
+  return value;
+}
+
+function toTracking(value: unknown): TrackingSummary | null {
+  if (value === undefined || value === null) return null;
+  const data = record(value);
+  const byClass: Record<string, number> = {};
+  for (const [label, count] of Object.entries(record(data.uniqueTrackIdsByClass ?? {}))) {
+    if (typeof count !== "number" || !Number.isFinite(count)) invalid();
+    byClass[label] = count;
+  }
+  return {
+    tracker: string(data, "tracker"),
+    uniqueTrackIds: number(data, "uniqueTrackIds"),
+    maxActiveTracks: number(data, "maxActiveTracks"),
+    trackedDetections: number(data, "trackedDetections"),
+    uniqueTrackIdsByClass: byClass,
+    countSemantics: string(data, "countSemantics"),
+  };
 }
 
 function toSummary(value: unknown): DetectionJobSummary {
@@ -41,6 +69,7 @@ function toSummary(value: unknown): DetectionJobSummary {
     createdAt: string(data, "createdAt"),
     completedAt: nullableString(data, "completedAt"),
     errorCode: nullableString(data, "errorCode"),
+    processingMode: processingMode(data),
   };
 }
 
@@ -68,6 +97,7 @@ export function toDetectionJob(value: unknown): DetectionJob {
     updatedAt: string(data, "updatedAt"),
     errorCode: nullableString(data, "errorCode"),
     errorMessage: nullableString(data, "errorMessage"),
+    processingMode: processingMode(data),
   };
 }
 
@@ -92,6 +122,8 @@ function toResult(value: unknown): DetectionResultMetadata {
     resultMetadataAvailable: boolean(data, "resultMetadataAvailable"),
     createdAt: string(data, "createdAt"),
     completedAt: nullableString(data, "completedAt"),
+    processingMode: processingMode(data),
+    tracking: toTracking(data.tracking),
   };
 }
 

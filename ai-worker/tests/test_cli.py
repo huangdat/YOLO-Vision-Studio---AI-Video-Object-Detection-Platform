@@ -168,3 +168,8 @@ def test_detect_passes_the_selected_model_to_the_pipeline(monkeypatch, capsys):
     assert cli.main(["detect", "--source", "a.mp4", "--source-type", "local", "--model", "yolov8n",
                      "--imgsz", "640", "--device", "cpu"]) == 0
     assert requests[0].model_key == "yolov8n" and requests[0].image_size == 640
+    assert requests[0].processing_mode.value == "DETECTION_ONLY"
+
+    assert cli.main(["detect", "--source", "a.mp4", "--source-type", "local", "--model", "yolov8n",
+                     "--tracking"]) == 0
+    assert requests[1].processing_mode.value == "DETECTION_TRACKING"

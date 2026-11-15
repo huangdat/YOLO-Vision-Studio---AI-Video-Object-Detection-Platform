@@ -10,6 +10,7 @@ import com.yolovision.dto.PageResponse;
 import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionSourceType;
+import com.yolovision.entity.ProcessingMode;
 import com.yolovision.exception.DetectionJobNotFoundException;
 import com.yolovision.exception.DetectionModelUnavailableException;
 import com.yolovision.exception.InvalidDetectionJobException;
@@ -54,11 +55,12 @@ public class DetectionJobQueryService {
         if (request == null) {
             throw InvalidDetectionJobException.of("request", "a JSON request body is required");
         }
+        ProcessingMode mode = parseProcessingMode(request.processingMode());
         UUID jobId;
         try {
             jobId = submissions.submit(new DetectionJobSubmissionRequest(request.modelKey(),
                     DetectionSourceType.YOUTUBE_URL, request.videoUrl(), request.confidence(), request.imageSize(),
-                    request.classes()));
+                    request.classes(), mode));
         } catch (DetectionModelUnavailableException exception) {
             throw exception;
         } catch (InvalidDetectionJobException exception) {
@@ -66,7 +68,19 @@ public class DetectionJobQueryService {
         }
         DetectionJob job = jobs.findWithModelById(jobId).orElseThrow(DetectionJobNotFoundException::new);
         return new DetectionJobAcceptedResponse(job.getId(), job.getStatus(), job.getProgress(),
-                job.getModel().getModelKey(), "Detection job accepted");
+                job.getModel().getModelKey(), "Detection job accepted", job.getProcessingMode());
+    }
+
+    /** Absent means Detection Only (every client written before tracking existed). */
+    static ProcessingMode parseProcessingMode(String value) {
+        if (value == null) {
+            return ProcessingMode.DETECTION_ONLY;
+        }
+        try {
+            return ProcessingMode.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            throw InvalidDetectionJobException.of("processingMode", "must be DETECTION_ONLY or DETECTION_TRACKING");
+        }
     }
 
     public DetectionJobDetailsResponse getJob(UUID jobId) {
@@ -91,12 +105,13 @@ public class DetectionJobQueryService {
                 job.getModel().getVersion(), job.getSourceType(), youtube ? job.getVideoUrl() : null,
                 job.getStatus(), job.getProgress(), job.getConfidence(), job.getImageSize(),
                 job.getSelectedClasses(), job.getCreatedAt(), job.getStartedAt(), job.getCompletedAt(),
-                job.getUpdatedAt(), job.getErrorCode(), job.getErrorMessage());
+                job.getUpdatedAt(), job.getErrorCode(), job.getErrorMessage(), job.getProcessingMode());
     }
 
     static DetectionJobSummaryResponse toSummary(DetectionJob job) {
         return new DetectionJobSummaryResponse(job.getId(), job.getModel().getModelKey(), job.getStatus(),
-                job.getProgress(), job.getCreatedAt(), job.getCompletedAt(), job.getErrorCode());
+                job.getProgress(), job.getCreatedAt(), job.getCompletedAt(), job.getErrorCode(),
+                job.getProcessingMode());
     }
 
     /** Short user-facing description of a status; never claims progress that is not stored. */

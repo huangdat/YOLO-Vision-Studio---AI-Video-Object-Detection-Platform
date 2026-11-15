@@ -1,6 +1,7 @@
 package com.yolovision.dto;
 
 import com.yolovision.entity.DetectionJobStatus;
+import com.yolovision.entity.ProcessingMode;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -12,5 +13,6 @@ public record DetectionJobSummaryResponse(
         int progress,
         Instant createdAt,
         Instant completedAt,
-        String errorCode) {
+        String errorCode,
+        ProcessingMode processingMode) {
 }

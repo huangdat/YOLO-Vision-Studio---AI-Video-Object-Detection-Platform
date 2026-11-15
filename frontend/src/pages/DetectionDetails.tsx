@@ -10,6 +10,7 @@ import { DetectionVideoPlayer } from "../components/results/DetectionVideoPlayer
 import { ResultJsonViewer } from "../components/results/ResultJsonViewer";
 import { ProgressBar } from "../components/ProgressBar";
 import { Alert, Disclosure, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
+import { processingModeLabel } from "../components/workspace/TrackingToggle";
 import { useApiResource, type Resource } from "../hooks/useApiResource";
 import {
   isNewerSnapshot,
@@ -29,6 +30,7 @@ import type {
   DetectionJob,
   DetectionProgressEvent,
   DetectionResultMetadata,
+  TrackingSummary,
 } from "../types/detections";
 
 const CONNECTION_LABEL: Record<ProgressConnection, string> = {
@@ -258,6 +260,10 @@ function JobSettings({ job }: { job: DetectionJob }) {
           <dd>{job.imageSize} px</dd>
         </div>
         <div>
+          <dt>Processing mode</dt>
+          <dd>{processingModeLabel(job.processingMode)}</dd>
+        </div>
+        <div>
           <dt>Objects</dt>
           <dd>{job.classes.map((id) => classLabel(className(id))).join(", ")}</dd>
         </div>
@@ -376,6 +382,35 @@ function ResultStatisticsPanel({
   );
 }
 
+/** Shown only for tracking jobs with real tracking totals; never in Detection Only mode. */
+function TrackingStatistics({ tracking }: { tracking: TrackingSummary }) {
+  const classes = Object.entries(tracking.uniqueTrackIdsByClass).sort((a, b) => b[1] - a[1]);
+  return (
+    <section className="tracking-summary" aria-labelledby="tracking-title">
+      <h3 id="tracking-title" className="subheading">Object tracking (ByteTrack)</h3>
+      <dl className="result-metrics">
+        <div><dt>Unique track IDs</dt><dd>{formatNumber(tracking.uniqueTrackIds)}</dd></div>
+        <div><dt>Most active tracks in a frame</dt><dd>{formatNumber(tracking.maxActiveTracks)}</dd></div>
+        <div><dt>Detections with a track ID</dt><dd>{formatNumber(tracking.trackedDetections)}</dd></div>
+      </dl>
+      {classes.length > 0 && (
+        <ul className="chip-list tracking-classes" aria-label="Unique track IDs by class">
+          {classes.map(([label, count]) => (
+            <li key={label} className="chip">
+              {classLabel(label)}: {count.toLocaleString()} {count === 1 ? "track" : "tracks"}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="field-hint tracking-note">
+        A track ID follows one object across consecutive frames within this video. Occlusion and
+        crowded scenes can split one object into several IDs or swap IDs, so unique track IDs
+        approximate, but do not guarantee, the number of distinct objects.
+      </p>
+    </section>
+  );
+}
+
 function ResultStatistics({ result }: { result: DetectionResultMetadata }) {
   const classes = Object.entries(result.detectionSummary).sort((a, b) => b[1] - a[1]);
   const largest = classes.length ? classes[0][1] : 0;
@@ -387,6 +422,14 @@ function ResultStatistics({ result }: { result: DetectionResultMetadata }) {
         <div><dt>Processing time</dt><dd>{formatDuration(result.processingTimeMs)}</dd></div>
         <div><dt>Model used</dt><dd><code>{result.modelKey}</code></dd></div>
       </dl>
+
+      {result.tracking && <TrackingStatistics tracking={result.tracking} />}
+      {!result.tracking && result.processingMode === "DETECTION_TRACKING" && (
+        <p className="field-hint tracking-note">
+          This job used object tracking, but no tracking totals were stored for it. The downloadable
+          result JSON contains the worker&apos;s full output.
+        </p>
+      )}
 
       <h3 className="subheading">Objects detected</h3>
       {classes.length === 0 ? (

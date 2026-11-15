@@ -11,9 +11,10 @@ import re
 
 import anyio
 from fastapi import APIRouter, Query, Request
+from fastapi import Response
 from fastapi.responses import JSONResponse
 
-from app.services.live_inference import LiveError, LiveInferenceService
+from app.services.live_inference import SESSION_ID_PATTERN, LiveError, LiveInferenceService
 
 CLASSES_PATTERN = re.compile(r"^\d{1,2}(,\d{1,2}){0,79}$")
 
@@ -52,12 +53,14 @@ def create_live_router(service: LiveInferenceService) -> APIRouter:
         confidence: float = Query(default=0.25, allow_inf_nan=False),
         image_size: int = Query(default=416, alias="imageSize"),
         classes: str = Query(default="1,2,3,5,7", max_length=239),
+        tracking: bool = Query(default=False),
+        session_id: str | None = Query(default=None, alias="sessionId", max_length=64),
     ) -> JSONResponse:
         try:
             if not CLASSES_PATTERN.match(classes):
                 raise LiveError("INVALID_PARAMETERS", "classes must be comma-separated COCO class IDs.", 400)
             settings = service.validate(model_key, frame_id, confidence, image_size,
-                                        [int(value) for value in classes.split(",")])
+                                        [int(value) for value in classes.split(",")], tracking, session_id)
             content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
             if content_type != "image/jpeg":
                 raise LiveError("INVALID_FRAME", "Frames must be sent as image/jpeg.", 400)
@@ -66,6 +69,13 @@ def create_live_router(service: LiveInferenceService) -> APIRouter:
         except LiveError as error:
             return error_response(error)
         return JSONResponse(result)
+
+    @router.delete("/sessions/{session_id}", status_code=204)
+    async def end_session(session_id: str) -> Response:
+        # Idempotent and outside the inference slot: cleanup must work while the worker is busy.
+        if SESSION_ID_PATTERN.match(session_id):
+            await anyio.to_thread.run_sync(service.end_session, session_id)
+        return Response(status_code=204)
 
     return router
 

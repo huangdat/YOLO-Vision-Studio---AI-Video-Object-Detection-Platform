@@ -1,7 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
 import { cameraSupportProblem, describeCameraError, listCameras, openCamera } from "./liveCamera";
-import { containRect, mapBox } from "./liveOverlay";
+import { containRect, detectionLabel, mapBox, TrackTrails } from "./liveOverlay";
 import { encodeFrame, liveMessage, liveSocketUrl, parseLiveMessage } from "./liveProtocol";
+
+describe("track overlay", () => {
+  const person = (trackId: number | null, x = 0) =>
+    ({ classId: 0, label: "person", confidence: 0.914, box: [x, 0, x + 10, 10] as [number, number, number, number],
+      trackId });
+
+  it("labels confirmed tracks with their server ID only", () => {
+    expect(detectionLabel(person(3))).toBe("Person #3 · 91%");
+    expect(detectionLabel(person(null))).toBe("Person 91%");
+  });
+
+  it("keeps trails bounded in length, age, and number of tracks", () => {
+    const trails = new TrackTrails(3, 2, 2);
+    for (let x = 0; x < 5; x += 1) trails.update([person(1, x * 10)]);
+    expect(trails.trail(1)).toEqual([[25, 5], [35, 5], [45, 5]]);
+
+    trails.update([person(2), person(3)]);
+    expect(trails.size).toBe(2);
+    expect(trails.trail(1)).toEqual([]);
+    trails.update([]);
+    trails.update([]);
+    trails.update([]);
+    expect(trails.size).toBe(0);
+    trails.update([person(null)]);
+    expect(trails.size).toBe(0);
+  });
+});
 
 describe("live protocol", () => {
   it("prefixes frames with a big-endian unsigned 32-bit frame ID", () => {
@@ -22,6 +49,27 @@ describe("live protocol", () => {
     expect(parseLiveMessage('{"type":"error","code":"X","message":"m","fatal":true}')).toMatchObject({ fatal: true });
     expect(parseLiveMessage('{"type":"stopped","reason":"IDLE_TIMEOUT","processedFrames":2,"droppedFrames":1}'))
       .toMatchObject({ reason: "IDLE_TIMEOUT", processedFrames: 2 });
+  });
+
+  it("parses track IDs, the tracking flag, and active tracks without inventing IDs", () => {
+    const message = parseLiveMessage(JSON.stringify({ type: "detections", frameId: 3, width: 640, height: 480,
+      tracking: true, activeTracks: 1, inferenceMs: 9, serverMs: 12, detections: [
+        { classId: 2, label: "car", confidence: 0.8, box: [1, 2, 3, 4], trackId: 7 },
+        { classId: 2, label: "car", confidence: 0.8, box: [1, 2, 3, 4], trackId: null },
+        { classId: 2, label: "car", confidence: 0.8, box: [1, 2, 3, 4] }] }));
+    expect(message).toMatchObject({ tracking: true, activeTracks: 1 });
+    expect(message?.type === "detections" && message.detections.map((d) => d.trackId)).toEqual([7, null, null]);
+
+    const legacy = parseLiveMessage(JSON.stringify({ type: "detections", frameId: 3, width: 640, height: 480,
+      inferenceMs: 9, detections: [] }));
+    expect(legacy).toMatchObject({ tracking: false, activeTracks: null });
+    expect(parseLiveMessage('{"type":"ready","sessionId":"s","modelKey":"m","maxFps":5,"maxFrameBytes":1,"maxInFlight":1,"tracking":true}'))
+      .toMatchObject({ tracking: true });
+  });
+
+  it.each([0, -1, 2.5, "7"])("rejects the invalid track ID %s", (trackId) => {
+    expect(parseLiveMessage(JSON.stringify({ type: "detections", frameId: 1, width: 1, height: 1, inferenceMs: 1,
+      detections: [{ classId: 1, label: "a", confidence: 1, box: [1, 2, 3, 4], trackId }] }))).toBeNull();
   });
 
   it.each([

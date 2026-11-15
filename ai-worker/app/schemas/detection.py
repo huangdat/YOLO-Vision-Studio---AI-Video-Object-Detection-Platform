@@ -16,6 +16,14 @@ class SourceType(StrEnum):
     YOUTUBE_URL = "YOUTUBE_URL"
 
 
+class ProcessingMode(StrEnum):
+    """DETECTION_ONLY analyses frames independently. DETECTION_TRACKING additionally runs
+    ByteTrack (online, frame by frame) so detections keep a Track ID within one video or session."""
+
+    DETECTION_ONLY = "DETECTION_ONLY"
+    DETECTION_TRACKING = "DETECTION_TRACKING"
+
+
 class DetectionRequest(EngineSchema):
     source: str = Field(min_length=1, max_length=8192)
     source_type: SourceType
@@ -25,6 +33,7 @@ class DetectionRequest(EngineSchema):
     classes: list[Annotated[int, Field(ge=0, strict=True)]] | None = None
     device: str | None = Field(default=None, pattern=r"^(auto|cpu|cuda:0)$")
     output_path: Path | None = None
+    processing_mode: ProcessingMode = ProcessingMode.DETECTION_ONLY
 
     @field_validator("source")
     @classmethod
@@ -50,6 +59,9 @@ class DetectionBox(EngineSchema):
     label: str
     confidence: float = Field(ge=0, le=1)
     xyxy: tuple[float, float, float, float]
+    # Set only in tracking mode, and only for detections ByteTrack confirmed as a track.
+    # Scoped to one video job or live session; never a global or permanent identity.
+    track_id: int | None = Field(default=None, ge=1)
 
 
 class DetectionStatistics(EngineSchema):

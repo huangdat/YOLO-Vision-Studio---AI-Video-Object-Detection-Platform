@@ -86,10 +86,11 @@ public class LiveWorkerClient implements LiveWorker {
 
     @Override
     public CompletableFuture<WorkerResult> infer(byte[] jpeg, long frameId, String modelKey, String confidence,
-            int imageSize, List<Integer> classes) {
+            int imageSize, List<Integer> classes, String trackingSessionId) {
         String query = "modelKey=" + encode(modelKey) + "&frameId=" + frameId + "&confidence=" + confidence
                 + "&imageSize=" + imageSize + "&classes="
-                + classes.stream().map(String::valueOf).collect(Collectors.joining(","));
+                + classes.stream().map(String::valueOf).collect(Collectors.joining(","))
+                + (trackingSessionId == null ? "" : "&tracking=true&sessionId=" + encode(trackingSessionId));
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/internal/live/infer?" + query))
                 .timeout(properties.inferenceTimeout())
                 .header("Content-Type", "image/jpeg")
@@ -102,6 +103,16 @@ public class LiveWorkerClient implements LiveWorker {
                 throw new LiveWorkerException("INFERENCE_FAILED", "The live worker returned an invalid response.");
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> endTrackingSession(String trackingSessionId) {
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create(baseUrl + "/internal/live/sessions/" + encode(trackingSessionId)))
+                .timeout(properties.inferenceTimeout())
+                .DELETE()
+                .build();
+        return send(request).thenApply(body -> null);
     }
 
     private CompletableFuture<String> send(HttpRequest request) {
@@ -123,7 +134,8 @@ public class LiveWorkerClient implements LiveWorker {
         String message = error.path("message").asText("");
         return switch (code) {
             case "MODEL_NOT_PREPARED", "MODEL_NOT_SUPPORTED", "INVALID_FRAME", "FRAME_TOO_LARGE",
-                    "INVALID_PARAMETERS", "INFERENCE_FAILED", "MODEL_LOAD_FAILED" ->
+                    "INVALID_PARAMETERS", "INFERENCE_FAILED", "MODEL_LOAD_FAILED", "FRAME_OUT_OF_ORDER",
+                    "SESSION_ENDED", "TRACKING_CAPACITY" ->
                     new LiveWorkerException(code, message.isBlank() ? "The live worker rejected the request." : message);
             case "WORKER_BUSY" -> new LiveWorkerException("WORKER_BUSY", "The live worker is busy.");
             default -> {

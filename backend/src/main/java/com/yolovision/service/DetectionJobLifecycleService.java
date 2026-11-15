@@ -4,6 +4,7 @@ import com.yolovision.dto.messaging.DetectionEventMessage;
 import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
+import com.yolovision.entity.TrackingSummary;
 import com.yolovision.exception.UnknownDetectionJobException;
 import com.yolovision.repository.DetectionJobRepository;
 import com.yolovision.repository.DetectionResultRepository;
@@ -159,6 +160,7 @@ public class DetectionJobLifecycleService {
             result.setResultJsonKey(payload.resultJsonKey());
             result.setTotalFrames(payload.totalFrames());
             result.setProcessingTimeMs(payload.processingTimeMs());
+            result.setTrackingSummary(trackingSummary(job, payload));
             results.save(result);
         }
         Instant now = Instant.now();
@@ -174,6 +176,23 @@ public class DetectionJobLifecycleService {
         LOG.info("Detection job {} completed: {} frames, output {}", job.getId(),
                 payload.totalFrames(), payload.outputVideoKey());
         return Outcome.APPLIED;
+    }
+
+    /** Totals are kept only for tracking jobs; a detection-only job never shows tracking data. */
+    private static TrackingSummary trackingSummary(DetectionJob job, DetectionEventMessage.Result payload) {
+        DetectionEventMessage.Tracking tracking = payload.tracking();
+        if (!job.getProcessingMode().tracking()) {
+            if (tracking != null) {
+                LOG.warn("Ignoring tracking totals reported for detection-only job {}", job.getId());
+            }
+            return null;
+        }
+        if (tracking == null) {
+            LOG.warn("Tracking job {} completed without tracking totals", job.getId());
+            return null;
+        }
+        return new TrackingSummary(tracking.tracker(), tracking.uniqueTrackIds(), tracking.maxActiveTracks(),
+                tracking.trackedDetections(), tracking.uniqueTrackIdsByClass());
     }
 
     private static void applyFailure(DetectionJob job, String code, String message) {

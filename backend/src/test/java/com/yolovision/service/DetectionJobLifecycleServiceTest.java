@@ -9,6 +9,8 @@ import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.ModelConfig;
+import com.yolovision.entity.ProcessingMode;
+import com.yolovision.entity.TrackingSummary;
 import com.yolovision.exception.UnknownDetectionJobException;
 import com.yolovision.repository.DetectionJobRepository;
 import com.yolovision.repository.DetectionResultRepository;
@@ -149,6 +151,37 @@ class DetectionJobLifecycleServiceTest {
     }
 
     @Test
+    void trackingCompletionPersistsTheTrackingTotals() {
+        DetectionJob tracked = job();
+        tracked.setProcessingMode(ProcessingMode.DETECTION_TRACKING);
+        jobs.saveAndFlush(tracked);
+
+        assertThat(lifecycle.apply(completedWithTracking())).isEqualTo(Outcome.APPLIED);
+        entityManager.flush();
+        entityManager.clear();
+
+        TrackingSummary summary = results.findByJob_Id(jobId).orElseThrow().getTrackingSummary();
+        assertThat(summary.tracker()).isEqualTo("bytetrack");
+        assertThat(summary.uniqueTrackIds()).isEqualTo(5);
+        assertThat(summary.maxActiveTracks()).isEqualTo(3);
+        assertThat(summary.trackedDetections()).isEqualTo(38);
+        assertThat(summary.uniqueTrackIdsByClass()).containsExactlyInAnyOrderEntriesOf(Map.of("bus", 2L, "car", 3L));
+        // Detection events are stored exactly as in Detection Only mode.
+        assertThat(results.findByJob_Id(jobId).orElseThrow().getDetectionSummary())
+                .containsExactlyInAnyOrderEntriesOf(Map.of("bus", 36L, "car", 4L));
+    }
+
+    @Test
+    void detectionOnlyJobsNeverStoreTrackingTotals() {
+        assertThat(lifecycle.apply(completedWithTracking())).isEqualTo(Outcome.APPLIED);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(results.findByJob_Id(jobId).orElseThrow().getTrackingSummary()).isNull();
+        assertThat(job().getProcessingMode()).isEqualTo(ProcessingMode.DETECTION_ONLY);
+    }
+
+    @Test
     void duplicateCompletionDoesNotCreateASecondResult() {
         lifecycle.apply(completed("yolo11n"));
 
@@ -275,6 +308,15 @@ class DetectionJobLifecycleServiceTest {
                 "Completed", Instant.now(), modelKey, new DetectionEventMessage.Result(
                         "detections/" + jobId + "/detected.mp4", "detections/" + jobId + "/result.json",
                         36, 7058L, Map.of("bus", 36L, "car", 4L)), null);
+    }
+
+    private DetectionEventMessage completedWithTracking() {
+        return new DetectionEventMessage(1, UUID.randomUUID(), jobId, DetectionEventStatus.COMPLETED, 100, 36, 36,
+                "Completed", Instant.now(), "yolo11n", new DetectionEventMessage.Result(
+                        "detections/" + jobId + "/detected.mp4", "detections/" + jobId + "/result.json",
+                        36, 7058L, Map.of("bus", 36L, "car", 4L), ProcessingMode.DETECTION_TRACKING,
+                        new DetectionEventMessage.Tracking("bytetrack", 5L, 3, 38L, Map.of("bus", 2L, "car", 3L))),
+                null);
     }
 
     private DetectionEventMessage failed(String code, String message) {

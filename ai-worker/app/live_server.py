@@ -41,6 +41,7 @@ def create_live_app(service: LiveInferenceService | None = None, settings: Setti
             settings.live_max_loaded_models, settings.live_max_concurrent_inferences,
             settings.live_model_sizes, settings.live_max_frame_bytes)
         yield
+        service.tracking.close_all()
         logger.info("Live worker stopped")
 
     application = FastAPI(title="YOLO Vision Studio Live Worker", version="1.0.0", lifespan=lifespan,
