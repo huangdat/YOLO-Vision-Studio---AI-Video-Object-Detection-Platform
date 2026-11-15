@@ -1,0 +1,214 @@
+{
+  "input": {
+    "video": "holdout.mp4",
+    "frames": 592,
+    "imgsz": 960,
+    "conf": 0.25,
+    "classes": [
+      1,
+      2,
+      3,
+      5,
+      7
+    ],
+    "model": "yolo11n",
+    "warmupFramesExcluded": 5,
+    "repeats": 3,
+    "cpusPinned": 4
+  },
+  "host": {
+    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+    "system": "Windows-10-10.0.26200-SP0",
+    "ultralytics": "8.4.207",
+    "torch": "2.13.0+cpu",
+    "openvino": "2026.4.1"
+  },
+  "results": {
+    "fp32": {
+      "inferenceMsMean": 89.35,
+      "inferenceMsP95": 110.01,
+      "endToEndFps": 9.75,
+      "endToEndFpsRange": [
+        9.46,
+        9.84
+      ],
+      "variance": {
+        "inferenceMsMean": {
+          "median": 89.35,
+          "min": 88.05,
+          "max": 92.06,
+          "stdev": 2.05
+        },
+        "inferenceMsP95": {
+          "median": 110.01,
+          "min": 109.18,
+          "max": 133.65,
+          "stdev": 13.89
+        },
+        "endToEndFps": {
+          "median": 9.75,
+          "min": 9.46,
+          "max": 9.84,
+          "stdev": 0.2
+        }
+      },
+      "artifactBytes": 5613764,
+      "peakRssBytes": 504205312,
+      "loadSeconds": 1.93,
+      "torchThreads": 4,
+      "openvinoThreads": null,
+      "cpuAffinity": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "detections": {
+        "bus": 1873,
+        "car": 7972,
+        "truck": 405,
+        "motorcycle": 1
+      },
+      "detectionsTotal": 10251,
+      "tracking": {
+        "uniqueTrackIds": 106,
+        "meanTrackLengthFrames": 101.2,
+        "tracksAtLeast25Frames": 55
+      },
+      "deterministicAcrossRepeats": true
+    },
+    "int8": {
+      "inferenceMsMean": 36.93,
+      "inferenceMsP95": 52.88,
+      "endToEndFps": 20.25,
+      "endToEndFpsRange": [
+        20.08,
+        21.4
+      ],
+      "variance": {
+        "inferenceMsMean": {
+          "median": 36.93,
+          "min": 35.23,
+          "max": 37.29,
+          "stdev": 1.1
+        },
+        "inferenceMsP95": {
+          "median": 52.88,
+          "min": 46.15,
+          "max": 55.72,
+          "stdev": 4.91
+        },
+        "endToEndFps": {
+          "median": 20.25,
+          "min": 20.08,
+          "max": 21.4,
+          "stdev": 0.72
+        }
+      },
+      "artifactBytes": 3408025,
+      "peakRssBytes": 592580608,
+      "loadSeconds": 7.56,
+      "torchThreads": 4,
+      "openvinoThreads": 4,
+      "cpuAffinity": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "detections": {
+        "car": 8334,
+        "bus": 1825,
+        "truck": 378
+      },
+      "detectionsTotal": 10537,
+      "tracking": {
+        "uniqueTrackIds": 104,
+        "meanTrackLengthFrames": 106.0,
+        "tracksAtLeast25Frames": 51
+      },
+      "deterministicAcrossRepeats": true,
+      "agreement": {
+        "boxRecallVsFp32": 0.9839,
+        "boxPrecisionVsFp32": 0.9572,
+        "fp32TracksCompared": 101,
+        "idSplitsVsFp32": 43,
+        "fp32TracksWithOneId": 70
+      }
+    },
+    "ov-fp32": {
+      "inferenceMsMean": 62.03,
+      "inferenceMsP95": 84.28,
+      "endToEndFps": 13.44,
+      "endToEndFpsRange": [
+        13.11,
+        13.83
+      ],
+      "variance": {
+        "inferenceMsMean": {
+          "median": 62.03,
+          "min": 59.85,
+          "max": 63.38,
+          "stdev": 1.78
+        },
+        "inferenceMsP95": {
+          "median": 84.28,
+          "min": 81.28,
+          "max": 90.77,
+          "stdev": 4.85
+        },
+        "endToEndFps": {
+          "median": 13.44,
+          "min": 13.11,
+          "max": 13.83,
+          "stdev": 0.36
+        }
+      },
+      "artifactBytes": 10842757,
+      "peakRssBytes": 616927232,
+      "loadSeconds": 4.96,
+      "torchThreads": 4,
+      "openvinoThreads": 4,
+      "cpuAffinity": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "detections": {
+        "bus": 1873,
+        "car": 7972,
+        "truck": 405,
+        "motorcycle": 1
+      },
+      "detectionsTotal": 10251,
+      "tracking": {
+        "uniqueTrackIds": 106,
+        "meanTrackLengthFrames": 101.2,
+        "tracksAtLeast25Frames": 55
+      },
+      "deterministicAcrossRepeats": true,
+      "agreement": {
+        "boxRecallVsFp32": 1.0,
+        "boxPrecisionVsFp32": 1.0,
+        "fp32TracksCompared": 106,
+        "idSplitsVsFp32": 0,
+        "fp32TracksWithOneId": 106
+      }
+    }
+  },
+  "gains": {
+    "runtime(fp32->ov-fp32)": {
+      "inference": 1.44,
+      "endToEnd": 1.38
+    },
+    "quantization(ov-fp32->int8)": {
+      "inference": 1.68,
+      "endToEnd": 1.51
+    },
+    "total(fp32->int8)": {
+      "inference": 2.42,
+      "endToEnd": 2.08
+    }
+  }
+}

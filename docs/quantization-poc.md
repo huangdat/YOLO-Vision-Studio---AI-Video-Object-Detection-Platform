@@ -1,5 +1,10 @@
 # INT8 Quantization PoC (OpenVINO, CPU)
 
+> Phase 2 (ground-truth evaluation tooling, wider benchmarks, optional Docker runtime, FP32 fallback
+> when OpenVINO is missing) is documented in [quantization-phase2.md](quantization-phase2.md). Some
+> limitations listed below, such as "Not in Docker yet", are resolved there. Phase 1 results stay as
+> recorded.
+
 Status: **proof of concept** on branch `feature/model-quantization-poc`. Off by default; the
 production path (PyTorch FP32) is unchanged. Frontend, Spring Boot, Compose, and the Docker
 images are not modified.
