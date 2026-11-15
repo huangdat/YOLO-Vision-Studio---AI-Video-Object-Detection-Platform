@@ -7,6 +7,8 @@ import com.yolovision.entity.DetectionJob;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.ModelConfig;
+import com.yolovision.entity.InferencePrecision;
+import com.yolovision.entity.InferenceRuntime;
 import com.yolovision.entity.ProcessingMode;
 import com.yolovision.entity.TrackingSummary;
 import java.sql.SQLException;
@@ -55,8 +57,8 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
     @Test
     void productionMigrationsValidateAndRerunningDoesNotReapplySeeds() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
-        assertThat(flyway.info().applied()).hasSize(8);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(flyway.info().applied()).hasSize(9);
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -173,6 +175,53 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
         assertSqlState(() -> jdbc.update("UPDATE detection_jobs SET processing_mode = 'OFFLINE' WHERE id = ?",
                 job.getId()), "23514");
+    }
+
+    // A rejected statement aborts the test transaction, so each constraint check is the last statement.
+    @Test
+    void precisionMigrationDefaultsExistingJobsToFp32AndRejectsUnknownValues() {
+        DetectionJob job = persistedJob();
+        jdbc.update("UPDATE detection_jobs SET inference_precision = DEFAULT WHERE id = ?", job.getId());
+        assertThat(jdbc.queryForObject("SELECT inference_precision FROM detection_jobs WHERE id = ?", String.class,
+                job.getId())).isEqualTo("FP32");
+        assertSqlState(() -> jdbc.update("UPDATE detection_jobs SET inference_precision = 'INT4' WHERE id = ?",
+                job.getId()), "23514");
+    }
+
+    @Test
+    void resultsWithoutReportedPrecisionStoreNullAndUnknownPrecisionsAreRejected() {
+        DetectionResult legacy = results.saveAndFlush(
+                new DetectionResult(persistedJob(), "results/legacy.mp4", Map.of()));
+        assertThat(jdbc.queryForObject(
+                "SELECT effective_precision IS NULL AND inference_runtime IS NULL FROM detection_results WHERE id = ?",
+                Boolean.class, legacy.getId())).isTrue();
+        assertSqlState(() -> jdbc.update(
+                "UPDATE detection_results SET effective_precision = 'FP16' WHERE id = ?", legacy.getId()), "23514");
+    }
+
+    @Test
+    void unknownInferenceRuntimesAreRejected() {
+        DetectionResult legacy = results.saveAndFlush(
+                new DetectionResult(persistedJob(), "results/legacy.mp4", Map.of()));
+        assertSqlState(() -> jdbc.update(
+                "UPDATE detection_results SET inference_runtime = 'TENSORRT' WHERE id = ?", legacy.getId()), "23514");
+    }
+
+    @Test
+    void effectivePrecisionAndRuntimeRoundTrip() {
+        DetectionJob job = persistedJob();
+        job.setInferencePrecision(InferencePrecision.INT8);
+        jobs.saveAndFlush(job);
+        DetectionResult result = new DetectionResult(job, "results/int8.mp4", Map.of("car", 9L));
+        result.setEffectivePrecision(InferencePrecision.INT8);
+        result.setInferenceRuntime(InferenceRuntime.OPENVINO);
+        results.saveAndFlush(result);
+        entityManager.clear();
+
+        DetectionResult loaded = results.findById(result.getId()).orElseThrow();
+        assertThat(loaded.getEffectivePrecision()).isEqualTo(InferencePrecision.INT8);
+        assertThat(loaded.getInferenceRuntime()).isEqualTo(InferenceRuntime.OPENVINO);
+        assertThat(jobs.findById(job.getId()).orElseThrow().getInferencePrecision()).isEqualTo(InferencePrecision.INT8);
     }
 
     @Test
