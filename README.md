@@ -60,32 +60,22 @@ Job lifecycle: `PENDING → QUEUED → DOWNLOADING → DETECTING → ENCODING �
 | Infrastructure | Docker Compose, nginx (self-hosted layout), GitHub Actions |
 | Testing | JUnit 5, Testcontainers, Pytest, Vitest, Testing Library |
 
-## Object Tracking Methods
+## Object Tracking with ByteTrack
 
 Detection analyses every frame independently, so its statistics are detection events summed across frames, not unique objects. **Tracking** links detections across frames so each object keeps a persistent ID. YOLO Vision Studio offers both: **Detection only** (the default) and **Detection + Tracking** with ByteTrack, switched on per video job or per Live Detection session.
 
 ![Detection per frame versus tracking with persistent IDs](docs/images/tracking-detection-vs-tracking.svg)
 
-- **Online tracking** decides frame by frame using only past frames. It works for live streams and suits both Live Detection and the background worker.
-- **Offline tracking** sees the whole video before deciding. It can repair gaps and ID switches, but it is not real-time.
+ByteTrack takes the YOLO boxes of each frame and matches them to the tracks of earlier frames in two stages. High-score boxes are matched first; low-score boxes then get a second chance against the tracks still unmatched, which keeps IDs through partial occlusion.
 
-![Online versus offline tracking](docs/images/tracking-online-vs-offline.svg)
+![How ByteTrack matches detections to tracks in each frame](docs/images/tracking-bytetrack-association.svg)
 
-Common tracking-by-detection methods take YOLO boxes as input:
-
-- **SORT**: Kalman-filter motion and IoU matching. Very fast, but IDs switch after occlusions.
-- **DeepSORT**: adds an appearance (Re-ID) embedding per box. Fewer ID switches, at the cost of an extra model.
-- **ByteTrack**: matches high-confidence boxes first, then low-confidence ones, to recover partly occluded objects without an appearance model.
-- **BoT-SORT**: builds on ByteTrack with camera-motion compensation and optional Re-ID. More robust, but slower.
-
-![SORT, DeepSORT, ByteTrack and BoT-SORT compared](docs/images/tracking-methods-overview.svg)
-
-**What this project uses: ByteTrack.** It is online, needs no extra model (important on CPU), and ships with Ultralytics.
-- **Per job and per session:** each video job and each live session gets its own tracker. The model weights stay shared, and track state is released when the job ends or the session stops.
-- **One forward pass for videos:** recorded videos are processed in a single pass, so this is online tracking, not offline.
+- **Online and lightweight:** each frame uses only earlier frames, with a Kalman filter for motion and box overlap (IoU) for matching. There is no appearance model, so it runs on CPU, adds no model download, and ships with Ultralytics.
+- **One forward pass for videos:** recorded YouTube videos are tracked in the same single pass as detection, exactly like a live stream.
+- **Per job and per session:** each video job and each live session gets its own tracker, with IDs starting at 1. The model weights stay shared, and track state is released when the job ends or the session stops.
 - **Detection counts are unchanged:** they mean the same as in Detection only. Unique track IDs are reported separately and approximate, but do not guarantee, the number of distinct objects, because occlusion can split or swap IDs.
 
-BoT-SORT, which adds camera-motion compensation, remains a possible later option for moving cameras or crowded scenes. Details, contracts, and limitations are in the [object tracking guide](docs/object-tracking.md).
+Details, contracts, and limitations are in the [object tracking guide](docs/object-tracking.md).
 
 ## Quick Start
 

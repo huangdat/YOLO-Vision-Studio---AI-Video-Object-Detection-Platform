@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>How ByteTrack associates detections in each frame</title>
+  <defs>
+    <marker id="b-94a3b8" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker>
+    <marker id="b-8b5cf6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8b5cf6"/></marker>
+  </defs>
+  <rect width="960" height="520" rx="16" fill="#f8fafc"/>
+
+  <text x="40" y="44" font-size="20" font-weight="700" fill="#0f172a">ByteTrack: two-stage matching, frame by frame</text>
+  <text x="40" y="68" font-size="14" fill="#475569">Online: each frame uses only the tracks from earlier frames. Motion and box overlap only, no appearance model.</text>
+
+  <!-- Tracks from earlier frames -->
+  <rect x="620" y="92" width="300" height="60" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="636" y="117" font-size="14" font-weight="700" fill="#0f172a">Tracks from frame t−1</text>
+  <text x="636" y="138" font-size="12" fill="#475569">Kalman filter predicts where each one moved</text>
+
+  <!-- YOLO detections -->
+  <rect x="40" y="234" width="200" height="64" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+  <text x="56" y="260" font-size="14" font-weight="700" fill="#2563eb">YOLO detections</text>
+  <text x="56" y="281" font-size="12" fill="#475569">boxes of frame t</text>
+
+  <!-- Split by score -->
+  <rect x="300" y="178" width="260" height="64" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="316" y="204" font-size="14" font-weight="700" fill="#0f172a">High-score boxes</text>
+  <text x="316" y="225" font-size="12" fill="#475569">score ≥ your confidence threshold</text>
+  <rect x="300" y="290" width="260" height="64" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="316" y="316" font-size="14" font-weight="700" fill="#0f172a">Low-score boxes</text>
+  <text x="316" y="337" font-size="12" fill="#475569">score between 0.1 and the threshold</text>
+
+  <!-- Stages -->
+  <rect x="620" y="178" width="300" height="64" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="636" y="204" font-size="14" font-weight="700" fill="#6d28d9">Stage 1: match by IoU</text>
+  <text x="636" y="225" font-size="12" fill="#475569">high-score boxes ↔ predicted tracks</text>
+  <rect x="620" y="290" width="300" height="64" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="636" y="316" font-size="14" font-weight="700" fill="#6d28d9">Stage 2: match by IoU</text>
+  <text x="636" y="337" font-size="12" fill="#475569">low-score boxes ↔ tracks still unmatched</text>
+
+  <!-- Arrows -->
+  <path d="M240 254 H270 V210 H294" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#b-94a3b8)"/>
+  <path d="M240 278 H270 V322 H294" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#b-94a3b8)"/>
+  <path d="M560 210 H614" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#b-94a3b8)"/>
+  <path d="M560 322 H614" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#b-94a3b8)"/>
+  <path d="M770 152 V172" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#b-8b5cf6)"/>
+  <path d="M770 242 V284" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#b-8b5cf6)"/>
+  <text x="780" y="268" font-size="12" fill="#6d28d9">unmatched tracks</text>
+
+  <!-- Results -->
+  <text x="40" y="402" font-size="16" font-weight="700" fill="#0f172a">Result for frame t</text>
+  <g font-size="12">
+    <rect x="40" y="414" width="210" height="80" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+    <text x="54" y="438" font-weight="700" fill="#0d9488">Matched box</text>
+    <text x="54" y="458" fill="#475569">keeps its Track ID</text>
+    <text x="54" y="478" fill="#475569" font-family="ui-monospace, Menlo, Consolas, monospace">car #7 0.94</text>
+
+    <rect x="263" y="414" width="210" height="80" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="277" y="438" font-weight="700" fill="#0f172a">Unmatched high-score box</text>
+    <text x="277" y="458" fill="#475569">starts a new track; its ID is</text>
+    <text x="277" y="478" fill="#475569">confirmed on the next frame</text>
+
+    <rect x="486" y="414" width="210" height="80" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="500" y="438" font-weight="700" fill="#0f172a">Unmatched track</text>
+    <text x="500" y="458" fill="#475569">kept as lost for 30 frames</text>
+    <text x="500" y="478" fill="#475569">(10 live), then removed</text>
+
+    <rect x="709" y="414" width="211" height="80" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="723" y="438" font-weight="700" fill="#0f172a">Unmatched low-score box</text>
+    <text x="723" y="458" fill="#475569">discarded as likely</text>
+    <text x="723" y="478" fill="#475569">background</text>
+  </g>
+</svg>
