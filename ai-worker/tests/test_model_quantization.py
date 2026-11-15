@@ -22,7 +22,8 @@ from app.services.detection_service import DetectionService
 from app.services.model_loader import LoadedModel, ModelLoader
 from app.services.model_quantization import (
     INT8_FORMAT, MANIFEST_FILENAME, MANIFEST_VERSION, OPENVINO_CPU_DEVICE, Int8Status,
-    build_calibration_dataset, export_int8, inspect_int8_artifact, int8_artifact_dir, sha256_file,
+    build_calibration_dataset, export_int8, inspect_int8_artifact, int8_artifact_dir, limit_openvino_threads,
+    sha256_file,
 )
 from app.services.model_registry import get_model_spec
 
@@ -185,7 +186,7 @@ def loader_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     models: list[SimpleNamespace] = []
 
     def factory(path: str, task: str | None = None) -> SimpleNamespace:
-        model = SimpleNamespace(path=path, task_argument=task, names=dict(NAMES), to=Mock())
+        model = SimpleNamespace(path=path, task_argument=task, names=dict(NAMES), to=Mock(), predict=Mock())
         models.append(model)
         return model
 
@@ -205,6 +206,7 @@ def test_int8_precision_loads_the_openvino_artifact_without_moving_it_to_a_torch
 
     assert models[0].path == str(directory.resolve()) and models[0].task_argument == "detect"
     models[0].to.assert_not_called()
+    assert models[0].predict.call_args.kwargs["device"] == OPENVINO_CPU_DEVICE  # warm-up on the CPU plugin
     assert (loaded.precision, loaded.device, loaded.predict_device) == ("int8", "cpu", OPENVINO_CPU_DEVICE)
     assert loaded.names == NAMES
 
@@ -261,6 +263,32 @@ def test_int8_is_cpu_only(tmp_path: Path, loader_environment) -> None:
     assert ModelLoader(settings).load("yolo11n", "auto", record_verification=False).precision == "fp32"
     with pytest.raises(ModelLoadingError, match="CPU only"):
         ModelLoader(settings).load("yolo11n", "cuda:0", precision="int8")
+
+
+def test_openvino_backend_is_recompiled_with_the_configured_thread_count(tmp_path: Path) -> None:
+    (tmp_path / "model.xml").write_text("<net/>", encoding="utf-8")
+
+    class FakeCore:
+        def read_model(self, path: str) -> str:
+            return f"read:{Path(path).name}"
+
+        def compile_model(self, model: str, device_name: str, config: dict) -> SimpleNamespace:
+            return SimpleNamespace(model=model, device=device_name, config=config,
+                                   get_property=lambda name: config[name])
+
+    from functools import partial
+
+    core = FakeCore()
+    backend = SimpleNamespace(compile_model=partial(core.compile_model, device_name="CPU",
+                                                    config={"PERFORMANCE_HINT": "LATENCY"}),
+                              ov_compiled_model=object())
+    model = SimpleNamespace(predictor=SimpleNamespace(model=SimpleNamespace(backend=backend)))
+
+    assert limit_openvino_threads(model, 3, tmp_path) == 3
+    assert backend.ov_compiled_model.model == "read:model.xml"
+    assert backend.ov_compiled_model.config == {"PERFORMANCE_HINT": "LATENCY", "INFERENCE_NUM_THREADS": 3}
+    assert backend.compile_model("again").config["INFERENCE_NUM_THREADS"] == 3  # later reshapes keep the cap
+    assert limit_openvino_threads(SimpleNamespace(predictor=None), 3, tmp_path) is None
 
 
 def test_inference_uses_the_runtime_device_of_an_int8_model() -> None:

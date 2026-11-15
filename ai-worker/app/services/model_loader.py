@@ -169,7 +169,7 @@ class ModelLoader:
 
     def _load_int8(self, torch: Any, spec: ModelSpec, artifact: Any, cache_dir: Path,
                    cache_key: tuple[str, str, str, str]) -> LoadedModel:
-        from app.services.model_quantization import OPENVINO_CPU_DEVICE
+        from app.services.model_quantization import OPENVINO_CPU_DEVICE, limit_openvino_threads
 
         try:
             os.environ.setdefault("YOLO_CONFIG_DIR", str(cache_dir / "ultralytics-settings"))
@@ -185,11 +185,18 @@ class ModelLoader:
                      else {index: str(value) for index, value in enumerate(raw_names)})
             if not names or any(key < 0 or not value for key, value in names.items()):
                 raise ValueError("Model class names are unavailable or invalid")
+            # One tiny warm-up creates the OpenVINO backend so its thread count can be capped.
+            numpy = importlib.import_module("numpy")
+            model.predict(source=numpy.zeros((64, 64, 3), dtype=numpy.uint8), imgsz=64,
+                          device=OPENVINO_CPU_DEVICE, save=False, verbose=False)
+            threads = limit_openvino_threads(model, self.settings.cpu_threads, artifact.directory)
         except Exception as error:
             raise ModelLoadingError(
                 f"The INT8 model for {spec.model_key} could not be loaded. Check that the optional "
                 "quantization dependencies (OpenVINO) are installed."
             ) from error
+        if threads is None:
+            logger.warning("Could not cap OpenVINO threads for %s; it may use every CPU core", spec.model_key)
         loaded = LoadedModel(model, spec.model_key, "cpu", names, precision="int8",
                              runtime_device=OPENVINO_CPU_DEVICE)
         self._cache[cache_key] = loaded

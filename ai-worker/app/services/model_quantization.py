@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from functools import partial
 import hashlib
 import importlib
 from importlib import metadata
@@ -309,6 +310,29 @@ def export_int8(
     if not status.available:
         raise QuantizationError(f"The installed INT8 artifact is not usable: {status.reason}")
     return Int8ExportResult(status, weights.stat().st_size, status.size_bytes or 0, fake_quantize)
+
+
+def limit_openvino_threads(model: Any, threads: int, artifact_dir: Path) -> int | None:
+    """Recompile an Ultralytics OpenVINO model so inference uses at most ``threads`` CPU threads.
+
+    OpenVINO otherwise uses every physical core and ignores both ``AI_CPU_THREADS`` and process
+    affinity on Windows. Ultralytics exposes no option for this, so the compiled model of its
+    backend is replaced. Call after one predict() (the backend is created lazily). Returns the
+    effective thread count, or None when the backend layout is not the expected one, in which case
+    nothing is changed.
+    """
+    backend = getattr(getattr(getattr(model, "predictor", None), "model", None), "backend", None)
+    compile_model = getattr(backend, "compile_model", None)
+    compiled = getattr(backend, "ov_compiled_model", None)
+    core = getattr(getattr(compile_model, "func", None), "__self__", None)
+    xml = next(Path(artifact_dir).glob("*.xml"), None)
+    if compiled is None or core is None or xml is None or not hasattr(compile_model, "keywords"):
+        return None
+    config = {**(compile_model.keywords.get("config") or {}), "INFERENCE_NUM_THREADS": int(threads)}
+    recompile = partial(compile_model.func, *compile_model.args, **{**compile_model.keywords, "config": config})
+    backend.ov_compiled_model = recompile(core.read_model(str(xml)))
+    backend.compile_model = recompile
+    return int(backend.ov_compiled_model.get_property("INFERENCE_NUM_THREADS"))
 
 
 def _validate_export(ultralytics: Any, exported: Path, names: dict[int, str], image_size: int,
