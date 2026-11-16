@@ -35,7 +35,7 @@ import tempfile
 import time
 from typing import Any
 
-CONFIGURATIONS = ("fp32", "int8", "ov-fp32")
+CONFIGURATIONS = ("fp32", "int8", "ov-fp32", "fp32-cuda")
 WARMUP_FRAMES = 5
 
 
@@ -60,6 +60,18 @@ def _openvino_threads(model: Any) -> int | None:
     compiled = getattr(backend, "ov_compiled_model", None)
     try:
         return int(compiled.get_property("INFERENCE_NUM_THREADS")) if compiled is not None else None
+    except Exception:
+        return None
+
+
+def _gpu_memory() -> dict[str, Any] | None:
+    """Peak GPU memory PyTorch allocated and reserved in this process, and the device name."""
+    try:
+        import torch
+
+        return {"name": torch.cuda.get_device_name(0),
+                "maxAllocatedBytes": int(torch.cuda.max_memory_allocated(0)),
+                "maxReservedBytes": int(torch.cuda.max_memory_reserved(0))}
     except Exception:
         return None
 
@@ -105,6 +117,10 @@ def _run_one(args: argparse.Namespace) -> dict[str, Any]:
         limit_openvino_threads(model, settings.cpu_threads, args.ov_fp32_dir)  # same budget as the INT8 run
         loaded = LoadedModel(model, args.model, "cpu", {int(k): str(v) for k, v in model.names.items()},
                              precision="fp32-openvino", runtime_device=OPENVINO_CPU_DEVICE)
+    elif args.run_one == "fp32-cuda":
+        # PyTorch FP32 on the NVIDIA GPU (strict: fails if CUDA is unavailable, never runs on the CPU).
+        loaded = ModelLoader(settings).load(args.model, "cuda:0", allow_download=False, record_verification=False,
+                                            precision="fp32")
     else:
         loaded = ModelLoader(settings).load(args.model, "cpu", allow_download=False, record_verification=False,
                                             precision=args.run_one)
@@ -137,6 +153,7 @@ def _run_one(args: argparse.Namespace) -> dict[str, Any]:
         "frameMs": frame_ms[WARMUP_FRAMES:], "detections": dict(detections),
         "peakRssBytes": _peak_rss_bytes(), "cpuAffinity": affinity, "torchThreads": settings.cpu_threads,
         "openvinoThreads": _openvino_threads(loaded.model), "boxes": frames,
+        "device": loaded.device, "gpu": _gpu_memory() if loaded.device.startswith("cuda") else None,
     }
 
 
@@ -234,7 +251,7 @@ def host_info() -> dict[str, Any]:
 
 def run_configurations(
     video: Path, *, model: str, imgsz: int, conf: float, classes: list[int], cpus: int, repeats: int,
-    include_openvino_fp32: bool, only: tuple[str, ...] | None = None,
+    include_openvino_fp32: bool, only: tuple[str, ...] | None = None, include_cuda: bool = False,
 ) -> tuple[list[str], dict[str, list[dict[str, Any]]], dict[str, int]]:
     """Run every configuration ``repeats`` times, each run in a fresh subprocess. ``video`` may be a
     video file or a directory of frames (read in sorted file-name order)."""
@@ -260,6 +277,9 @@ def run_configurations(
             ov_fp32_dir = _export_openvino_fp32(model, imgsz, workspace / "ov-fp32")
             sizes["ov-fp32"] = _artifact_size(ov_fp32_dir)
             configurations.append("ov-fp32")
+        if include_cuda:
+            configurations.append("fp32-cuda")
+            sizes["fp32-cuda"] = sizes["fp32"]
         if only:
             configurations = [name for name in configurations if name in only]
         for repeat in range(repeats):
@@ -308,6 +328,7 @@ def summarize(configurations: list[str], runs: dict[str, list[dict[str, Any]]], 
             "loadSeconds": round(statistics.median(run["loadSeconds"] for run in repeats), 2),
             "torchThreads": first["torchThreads"], "openvinoThreads": first["openvinoThreads"],
             "cpuAffinity": first["cpuAffinity"],
+            "device": first.get("device"), "gpu": first.get("gpu"),
             "detections": first["detections"], "detectionsTotal": sum(first["detections"].values()),
             "tracking": _tracking(first["boxes"]),
             "deterministicAcrossRepeats": all(run["boxes"] == first["boxes"] for run in repeats),
@@ -327,7 +348,8 @@ def gains(results: dict[str, Any]) -> dict[str, Any]:
                 "endToEnd": round(results[fast]["endToEndFps"] / results[slow]["endToEndFps"], 2)}
 
     return {"runtime(fp32->ov-fp32)": ratio("fp32", "ov-fp32"),
-            "quantization(ov-fp32->int8)": ratio("ov-fp32", "int8"), "total(fp32->int8)": ratio("fp32", "int8")}
+            "quantization(ov-fp32->int8)": ratio("ov-fp32", "int8"), "total(fp32->int8)": ratio("fp32", "int8"),
+            "gpu(fp32->fp32-cuda)": ratio("fp32", "fp32-cuda")}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -340,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cpus", type=int, default=4, help="Physical cores pinned for every run (0: no pinning)")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--include-openvino-fp32", action="store_true")
+    parser.add_argument("--include-cuda", action="store_true", help="Also run PyTorch FP32 on cuda:0")
     parser.add_argument("--output", type=Path, help="Write the full JSON report here")
     parser.add_argument("--run-one", choices=CONFIGURATIONS, help=argparse.SUPPRESS)
     parser.add_argument("--ov-fp32-dir", type=Path, help=argparse.SUPPRESS)
@@ -354,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         configurations, runs, sizes = run_configurations(
             args.video, model=args.model, imgsz=args.imgsz, conf=args.conf, classes=args.classes, cpus=args.cpus,
-            repeats=args.repeats, include_openvino_fp32=args.include_openvino_fp32)
+            repeats=args.repeats, include_openvino_fp32=args.include_openvino_fp32, include_cuda=args.include_cuda)
     except RuntimeError as error:
         print(str(error), file=sys.stderr)
         return 2
