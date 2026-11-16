@@ -59,3 +59,6 @@ runs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Tracker parity fixtures derived from licensed datasets (MOT17: CC BY-NC-SA) stay local.
+frontend/src/lib/tracking/__fixtures__/local/
