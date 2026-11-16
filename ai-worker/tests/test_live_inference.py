@@ -101,7 +101,7 @@ def test_valid_jpeg_returns_the_documented_contract_in_frame_pixels(cache: Path)
     assert response.json() == {
         "frameId": 42, "modelKey": "yolo11n", "width": 640, "height": 480,
         "detections": [{"classId": 2, "label": "car", "confidence": 0.87, "box": [120.0, 85.0, 310.0, 260.0]}],
-        "inferenceMs": 42.0,
+        "inferenceMs": 42.0, "device": "cpu", "precision": "FP32",
     }
     call = loader.model.calls[0]
     assert call["conf"] == 0.25 and call["imgsz"] == 416 and call["classes"] == [1, 2, 3, 5, 7]

@@ -87,10 +87,17 @@ public class LiveWorkerClient implements LiveWorker {
     @Override
     public CompletableFuture<WorkerResult> infer(byte[] jpeg, long frameId, String modelKey, String confidence,
             int imageSize, List<Integer> classes, String trackingSessionId) {
+        return infer(jpeg, frameId, modelKey, confidence, imageSize, classes, trackingSessionId, false);
+    }
+
+    @Override
+    public CompletableFuture<WorkerResult> infer(byte[] jpeg, long frameId, String modelKey, String confidence,
+            int imageSize, List<Integer> classes, String trackingSessionId, boolean trackingInput) {
         String query = "modelKey=" + encode(modelKey) + "&frameId=" + frameId + "&confidence=" + confidence
                 + "&imageSize=" + imageSize + "&classes="
                 + classes.stream().map(String::valueOf).collect(Collectors.joining(","))
-                + (trackingSessionId == null ? "" : "&tracking=true&sessionId=" + encode(trackingSessionId));
+                + (trackingSessionId == null ? "" : "&tracking=true&sessionId=" + encode(trackingSessionId))
+                + (trackingInput ? "&trackingInput=true" : "");
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/internal/live/infer?" + query))
                 .timeout(properties.inferenceTimeout())
                 .header("Content-Type", "image/jpeg")

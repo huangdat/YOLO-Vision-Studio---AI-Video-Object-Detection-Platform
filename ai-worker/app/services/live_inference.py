@@ -56,6 +56,9 @@ class LiveSettings:
     classes: list[int]
     tracking: bool = False
     session_id: str | None = None
+    # Frontend tracking: detect at ByteTrack's low-score floor and return every box without Track IDs,
+    # so the browser's ByteTrack sees the same input as the server tracker. No tracking state here.
+    tracking_input: bool = False
 
     @property
     def signature(self) -> tuple[Any, ...]:
@@ -269,8 +272,11 @@ class LiveInferenceService:
     # Inference ---------------------------------------------------------------------------
 
     def validate(self, model_key: str, frame_id: int, confidence: float, image_size: int,
-                 classes: list[int], tracking: bool = False, session_id: str | None = None) -> LiveSettings:
+                 classes: list[int], tracking: bool = False, session_id: str | None = None,
+                 tracking_input: bool = False) -> LiveSettings:
         errors: list[str] = []
+        if tracking and tracking_input:
+            errors.append("tracking and trackingInput cannot be combined")
         if tracking and (session_id is None or not SESSION_ID_PATTERN.match(session_id)):
             errors.append("sessionId (8-64 letters, digits, or '-') is required for tracking")
         if not 0 <= frame_id <= MAX_FRAME_ID:
@@ -285,7 +291,7 @@ class LiveInferenceService:
         if errors:
             raise LiveError("INVALID_PARAMETERS", "; ".join(errors) + ".", 400)
         return LiveSettings(model_key, frame_id, confidence, image_size, sorted(classes), tracking,
-                            session_id if tracking else None)
+                            session_id if tracking else None, tracking_input)
 
     def infer(self, frame: bytes, settings: LiveSettings) -> dict[str, Any]:
         if not frame:
@@ -312,6 +318,10 @@ class LiveInferenceService:
                 tracked = session.tracker.update(detected.boxes)
                 session.last_frame_id = settings.frame_id
             boxes, active_tracks = tracked.objects, tracked.active_tracks
+        elif settings.tracking_input:
+            floor = ByteTrackParameters.for_confidence(settings.confidence).inference_confidence
+            detected = self._detect(image, loaded, settings, floor)
+            boxes, active_tracks = detected.boxes, None
         else:
             detected = self._detect(image, loaded, settings, settings.confidence)
             boxes, active_tracks = detected.boxes, None
@@ -323,7 +333,13 @@ class LiveInferenceService:
             "height": height,
             "detections": [self._detection(box, width, height, settings.tracking) for box in boxes],
             "inferenceMs": round(detected.inference_time_ms if detected.inference_time_ms is not None else elapsed, 1),
+            # What actually ran (never the configuration echoed back).
+            "device": loaded.device,
+            "precision": str(getattr(loaded, "precision", "fp32")).upper(),
         }
+        if settings.tracking_input:
+            result["trackingInput"] = True
+            result["lowScoreFloor"] = ByteTrackParameters.for_confidence(settings.confidence).inference_confidence
         if settings.tracking:
             result["tracking"] = True
             result["activeTracks"] = active_tracks

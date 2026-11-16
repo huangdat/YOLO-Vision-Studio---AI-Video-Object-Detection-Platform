@@ -23,25 +23,43 @@ public final class LiveMessages {
 
     /**
      * {"type":"start","version":1,"modelKey":"yolo11n","confidence":0.25,"imageSize":416,"classes":[...],
-     * "tracking":true}. {@code tracking} is optional; absent or false means Detection Only.
+     * "tracking":true,"trackingMode":"CLIENT"}. {@code tracking} is optional; absent or false means
+     * Detection Only. {@code trackingMode} is optional: SERVER (the default, ByteTrack in the live worker)
+     * or CLIENT (the worker only detects, at ByteTrack's low-score floor; the browser tracks).
      */
     @JsonIgnoreProperties(ignoreUnknown = false)
     public record StartRequest(String type, Integer version, String modelKey, BigDecimal confidence,
-            Integer imageSize, List<Integer> classes, Boolean tracking) {
+            Integer imageSize, List<Integer> classes, Boolean tracking, String trackingMode) {
+
+        public StartRequest(String type, Integer version, String modelKey, BigDecimal confidence, Integer imageSize,
+                List<Integer> classes, Boolean tracking) {
+            this(type, version, modelKey, confidence, imageSize, classes, tracking, null);
+        }
     }
+
+    public static final String TRACKING_SERVER = "SERVER";
+    public static final String TRACKING_CLIENT = "CLIENT";
 
     // Server -> client --------------------------------------------------------------------
 
-    /** {@code tracker} is "bytetrack" when tracking is enabled for the session, otherwise omitted. */
+    /**
+     * {@code tracker} is "bytetrack" when tracking is enabled for the session, otherwise omitted.
+     * {@code trackingMode} (SERVER or CLIENT) says where ByteTrack runs; omitted without tracking.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Ready(String type, int version, String sessionId, String modelKey, int maxFps,
             int maxFrameBytes, int maxInFlight, int imageSize, BigDecimal confidence, List<Integer> classes,
-            boolean tracking, String tracker) {
-
+            boolean tracking, String tracker, String trackingMode) {
         public Ready(String sessionId, String modelKey, int maxFps, int maxFrameBytes, int imageSize,
                 BigDecimal confidence, List<Integer> classes, boolean tracking) {
+            this(sessionId, modelKey, maxFps, maxFrameBytes, imageSize, confidence, classes,
+                    tracking ? TRACKING_SERVER : null);
+        }
+
+        public Ready(String sessionId, String modelKey, int maxFps, int maxFrameBytes, int imageSize,
+                BigDecimal confidence, List<Integer> classes, String trackingMode) {
             this("ready", PROTOCOL_VERSION, sessionId, modelKey, maxFps, maxFrameBytes, 1, imageSize, confidence,
-                    classes, tracking, tracking ? ProcessingMode.TRACKER : null);
+                    classes, trackingMode != null, trackingMode != null ? ProcessingMode.TRACKER : null, trackingMode);
         }
     }
 
@@ -58,20 +76,40 @@ public final class LiveMessages {
         }
     }
 
-    /** {@code tracking} and {@code activeTracks} are sent only in tracking sessions. */
+    /**
+     * {@code tracking} and {@code activeTracks} are sent only in server-tracking sessions. In CLIENT
+     * tracking sessions {@code trackingMode} is "CLIENT", the detections carry no Track IDs, and
+     * {@code lowScoreFloor} is the confidence YOLO ran at (boxes below the session confidence are
+     * included for ByteTrack's second association). {@code device} and {@code precision} are what the
+     * worker actually ran, when it reports them.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Detections(String type, long frameId, int width, int height, List<Detection> detections,
-            double inferenceMs, long serverMs, Boolean tracking, Integer activeTracks) {
-
+            double inferenceMs, long serverMs, Boolean tracking, Integer activeTracks, String trackingMode,
+            Double lowScoreFloor, String device, String precision) {
         public Detections(long frameId, int width, int height, List<Detection> detections, double inferenceMs,
                 long serverMs) {
-            this("detections", frameId, width, height, detections, inferenceMs, serverMs, null, null);
+            this("detections", frameId, width, height, detections, inferenceMs, serverMs, null, null, null, null,
+                    null, null);
         }
 
         public Detections(long frameId, int width, int height, List<Detection> detections, double inferenceMs,
                 long serverMs, Integer activeTracks) {
             this("detections", frameId, width, height, detections, inferenceMs, serverMs,
-                    activeTracks == null ? null : Boolean.TRUE, activeTracks);
+                    activeTracks == null ? null : Boolean.TRUE, activeTracks, null, null, null, null);
+        }
+
+        /** Same message with the worker's execution details attached. */
+        public Detections withExecution(String device, String precision) {
+            return new Detections(type, frameId, width, height, detections, inferenceMs, serverMs, tracking,
+                    activeTracks, trackingMode, lowScoreFloor, device, precision);
+        }
+
+        /** Tracker input for a CLIENT tracking session (no Track IDs). */
+        public static Detections clientTracking(long frameId, int width, int height, List<Detection> detections,
+                double inferenceMs, long serverMs, Double lowScoreFloor) {
+            return new Detections("detections", frameId, width, height, detections, inferenceMs, serverMs, null,
+                    null, TRACKING_CLIENT, lowScoreFloor, null, null);
         }
     }
 
@@ -115,11 +153,17 @@ public final class LiveMessages {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record WorkerResult(long frameId, String modelKey, int width, int height, List<Detection> detections,
-            double inferenceMs, Boolean tracking, Integer activeTracks) {
-
+            double inferenceMs, Boolean tracking, Integer activeTracks, Boolean trackingInput, Double lowScoreFloor,
+            String device, String precision) {
         public WorkerResult(long frameId, String modelKey, int width, int height, List<Detection> detections,
                 double inferenceMs) {
             this(frameId, modelKey, width, height, detections, inferenceMs, null, null);
+        }
+
+        public WorkerResult(long frameId, String modelKey, int width, int height, List<Detection> detections,
+                double inferenceMs, Boolean tracking, Integer activeTracks) {
+            this(frameId, modelKey, width, height, detections, inferenceMs, tracking, activeTracks, null, null,
+                    null, null);
         }
     }
 }

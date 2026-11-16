@@ -93,7 +93,20 @@ public class LiveDetectionService {
         }
     }
 
-    record Settings(String modelKey, BigDecimal confidence, int imageSize, List<Integer> classes, boolean tracking) {
+    /**
+     * {@code tracking} means ByteTrack in the live worker (SERVER mode); {@code clientTracking} means the
+     * browser tracks and the worker only returns tracker input. At most one of them is true.
+     */
+    record Settings(String modelKey, BigDecimal confidence, int imageSize, List<Integer> classes, boolean tracking,
+            boolean clientTracking) {
+
+        Settings(String modelKey, BigDecimal confidence, int imageSize, List<Integer> classes, boolean tracking) {
+            this(modelKey, confidence, imageSize, classes, tracking, false);
+        }
+
+        String trackingMode() {
+            return tracking ? LiveMessages.TRACKING_SERVER : clientTracking ? LiveMessages.TRACKING_CLIENT : null;
+        }
     }
 
     private final LiveDetectionProperties properties;
@@ -226,10 +239,11 @@ public class LiveDetectionService {
                     session.lastActivityNanos = now;
                     session.state = State.ACTIVE;
                     LOG.info("Live session {} started: model {}, {} px, {} classes, tracking {}", session.sessionId,
-                            settings.modelKey(), settings.imageSize(), settings.classes().size(), settings.tracking());
+                            settings.modelKey(), settings.imageSize(), settings.classes().size(),
+                            settings.trackingMode() == null ? "off" : settings.trackingMode());
                     session.connection.send(new Ready(session.sessionId, settings.modelKey(), properties.maxFps(),
                             properties.maxFrameBytes(), settings.imageSize(), settings.confidence(),
-                            settings.classes(), settings.tracking()));
+                            settings.classes(), settings.trackingMode()));
                 });
         session.pending = load;
     }
@@ -259,9 +273,18 @@ public class LiveDetectionService {
         if (invalid) {
             errors.put("classes", "must contain 1-80 unique COCO class IDs between 0 and 79");
         }
-        // Tracking state lives in the worker, keyed by this session's server-generated ID.
-        boolean tracking = Boolean.TRUE.equals(request.tracking());
-        return new Settings(modelKey, confidence.stripTrailingZeros(), imageSize, List.copyOf(unique), tracking);
+        // SERVER tracking state lives in the worker, keyed by this session's server-generated ID; CLIENT
+        // tracking state lives only in the browser.
+        String mode = request.trackingMode();
+        boolean tracking = Boolean.TRUE.equals(request.tracking()) || mode != null;
+        if (mode != null && !LiveMessages.TRACKING_SERVER.equals(mode) && !LiveMessages.TRACKING_CLIENT.equals(mode)) {
+            errors.put("trackingMode", "must be SERVER or CLIENT");
+        } else if (mode != null && Boolean.FALSE.equals(request.tracking())) {
+            errors.put("trackingMode", "requires tracking to be enabled");
+        }
+        boolean client = tracking && LiveMessages.TRACKING_CLIENT.equals(mode);
+        return new Settings(modelKey, confidence.stripTrailingZeros(), imageSize, List.copyOf(unique),
+                tracking && !client, client);
     }
 
     // Frames ------------------------------------------------------------------------------------
@@ -308,7 +331,8 @@ public class LiveDetectionService {
         CompletableFuture<WorkerResult> call;
         try {
             call = worker.infer(jpeg, frameId, settings.modelKey(), settings.confidence().toPlainString(),
-                    settings.imageSize(), settings.classes(), settings.tracking() ? session.sessionId : null);
+                    settings.imageSize(), settings.classes(), settings.tracking() ? session.sessionId : null,
+                    settings.clientTracking());
         } catch (RuntimeException exception) {
             call = CompletableFuture.failedFuture(exception);
         }
@@ -337,16 +361,23 @@ public class LiveDetectionService {
             session.processed.incrementAndGet();
             long serverMs = TimeUnit.NANOSECONDS.toMillis(nanoTime.getAsLong() - started);
             List<LiveMessages.Detection> detections = result.detections() == null ? List.of() : result.detections();
+            Detections message;
             if (settings.tracking()) {
                 // Track IDs are forwarded exactly as the worker assigned them; none are invented here.
-                session.connection.send(new Detections(frameId, result.width(), result.height(), detections,
-                        result.inferenceMs(), serverMs, result.activeTracks() == null ? 0 : result.activeTracks()));
+                message = new Detections(frameId, result.width(), result.height(), detections,
+                        result.inferenceMs(), serverMs, result.activeTracks() == null ? 0 : result.activeTracks());
+            } else if (settings.clientTracking()) {
+                // Tracker input for the browser's ByteTrack: every box from the low-score floor, no Track IDs.
+                message = Detections.clientTracking(frameId, result.width(), result.height(),
+                        detections.stream().map(LiveDetectionService::withoutTrackId).toList(), result.inferenceMs(),
+                        serverMs, result.lowScoreFloor());
             } else {
                 // Detection Only: the original message shape, without any tracking fields.
-                session.connection.send(new Detections(frameId, result.width(), result.height(),
+                message = new Detections(frameId, result.width(), result.height(),
                         detections.stream().map(LiveDetectionService::withoutTrackId).toList(), result.inferenceMs(),
-                        serverMs));
+                        serverMs);
             }
+            session.connection.send(message.withExecution(result.device(), result.precision()));
         });
     }
 

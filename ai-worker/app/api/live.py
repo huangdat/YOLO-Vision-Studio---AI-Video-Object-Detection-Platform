@@ -55,12 +55,14 @@ def create_live_router(service: LiveInferenceService) -> APIRouter:
         classes: str = Query(default="1,2,3,5,7", max_length=239),
         tracking: bool = Query(default=False),
         session_id: str | None = Query(default=None, alias="sessionId", max_length=64),
+        tracking_input: bool = Query(default=False, alias="trackingInput"),
     ) -> JSONResponse:
         try:
             if not CLASSES_PATTERN.match(classes):
                 raise LiveError("INVALID_PARAMETERS", "classes must be comma-separated COCO class IDs.", 400)
             settings = service.validate(model_key, frame_id, confidence, image_size,
-                                        [int(value) for value in classes.split(",")], tracking, session_id)
+                                        [int(value) for value in classes.split(",")], tracking, session_id,
+                                        tracking_input)
             content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
             if content_type != "image/jpeg":
                 raise LiveError("INVALID_FRAME", "Frames must be sent as image/jpeg.", 400)
