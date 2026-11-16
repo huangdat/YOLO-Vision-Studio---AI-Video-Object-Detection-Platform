@@ -18,8 +18,13 @@ import {
   liveSocketUrl,
   MAX_FRAME_ID,
   parseLiveMessage,
+  type LiveDetection,
+  type LiveDetections,
   type LiveServerMessage,
+  type LiveTrackingMode,
 } from "../lib/liveProtocol";
+import { DEFAULT_TRACKER_CONFIG } from "../lib/tracking/byteTracker";
+import { createTrackerWorker, LiveTrackerClient, type WorkerLike } from "../lib/tracking/trackerClient";
 
 export type LivePhase = "idle" | "starting" | "running";
 export type LiveConnectionState = "idle" | "connecting" | "live";
@@ -29,8 +34,10 @@ export interface LiveSettings {
   confidence: number;
   imageSize: number;
   classes: number[];
-  /** Run ByteTrack on the server for this session. */
+  /** Run ByteTrack for this session. */
   tracking: boolean;
+  /** Where ByteTrack runs: CLIENT (browser Web Worker) or SERVER (live worker, legacy). */
+  trackingMode?: LiveTrackingMode;
 }
 
 export interface LiveMetrics {
@@ -43,8 +50,17 @@ export interface LiveMetrics {
   processed: number;
   dropped: number;
   detections: number;
-  /** Active tracks reported by the worker for the last frame; null unless tracking is on. */
+  /** Active tracks for the last frame; null unless tracking is on. */
   activeTracks: number | null;
+  /** Frames sent to the server per second (not camera FPS). */
+  submittedFps: number | null;
+  /** Time from sending a frame to receiving its detections (network + server + YOLO). */
+  roundTripMs: number | null;
+  /** ByteTrack time in the browser's Web Worker for the last frame (CLIENT tracking only). */
+  trackingMs: number | null;
+  /** Device and precision the worker reported for the last frame. */
+  device: string | null;
+  precision: string | null;
 }
 
 export interface LiveNotice {
@@ -63,6 +79,8 @@ export interface LiveDependencies {
   captureFrame: (video: HTMLVideoElement) => Promise<CapturedFrame | null>;
   now: () => number;
   media: () => MediaDevices | undefined;
+  /** Creates the tracking Web Worker for CLIENT tracking sessions. */
+  trackerWorker: () => WorkerLike;
 }
 
 /** Captures the current video frame, scaled to at most LIVE_CAPTURE_WIDTH, as JPEG. One canvas is reused. */
@@ -94,6 +112,7 @@ const defaultDependencies = (): LiveDependencies => ({
   captureFrame: createFrameCapturer(),
   now: () => performance.now(),
   media: () => (typeof navigator === "undefined" ? undefined : navigator.mediaDevices),
+  trackerWorker: createTrackerWorker,
 });
 
 interface Run {
@@ -116,10 +135,27 @@ interface Run {
   activeTracks: number | null;
   /** Created per session from the server's ready message; discarded when the session ends. */
   trails: TrackTrails | null;
+  /** Browser ByteTrack for a CLIENT tracking session; closed when the session ends. */
+  tracker: LiveTrackerClient | null;
+  clientTracking: boolean;
+  confidence: number;
+  sendTimes: number[];
+  roundTripMs: number | null;
+  trackingMs: number | null;
+  device: string | null;
+  precision: string | null;
+  lastDrawnFrameId: number;
 }
 
 const EMPTY_METRICS: LiveMetrics = {
   fps: null, latencyMs: null, inferenceMs: null, processed: 0, dropped: 0, detections: 0, activeTracks: null,
+  submittedFps: null, roundTripMs: null, trackingMs: null, device: null, precision: null,
+};
+
+const rate = (times: number[], now: number): [number[], number | null] => {
+  const recent = times.filter((time) => now - time <= 3000);
+  const span = recent.length > 1 ? (recent[recent.length - 1] - recent[0]) / 1000 : 0;
+  return [recent, span > 0 ? (recent.length - 1) / span : null];
 };
 
 /**
@@ -143,8 +179,9 @@ export function useLiveDetection(
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [cameraId, setCameraId] = useState<string>("");
   const [mirrored, setMirroredState] = useState(true);
-  /** Whether the server confirmed tracking for the running session. */
+  /** Whether the server confirmed tracking for the running session, and where it runs. */
   const [tracking, setTracking] = useState(false);
+  const [trackingMode, setTrackingMode] = useState<LiveTrackingMode | null>(null);
 
   const setMirrored = useCallback((value: boolean) => {
     mirroredRef.current = value;
@@ -166,11 +203,17 @@ export function useLiveDetection(
 
   const snapshot = (current: Run): LiveMetrics => {
     const now = deps.current.now();
-    const recent = current.resultTimes.filter((time) => now - time <= 3000);
-    current.resultTimes = recent;
-    const span = recent.length > 1 ? (recent[recent.length - 1] - recent[0]) / 1000 : 0;
+    const [results, fps] = rate(current.resultTimes, now);
+    const [sends, submittedFps] = rate(current.sendTimes, now);
+    current.resultTimes = results;
+    current.sendTimes = sends;
     return {
-      fps: span > 0 ? (recent.length - 1) / span : null,
+      fps,
+      submittedFps,
+      roundTripMs: current.roundTripMs,
+      trackingMs: current.trackingMs,
+      device: current.device,
+      precision: current.precision,
       latencyMs: current.latencyMs,
       inferenceMs: current.inferenceMs,
       processed: current.processed,
@@ -204,6 +247,8 @@ export function useLiveDetection(
       }
     }
     stopStream(current.stream);
+    current.tracker?.close(); // terminates the tracking Web Worker
+    current.tracker = null;
     current.trails?.clear();
     current.trails = null;
     const video = videoRef.current;
@@ -212,6 +257,7 @@ export function useLiveDetection(
     setMetrics(snapshot(current));
     run.current = null;
     setTracking(false);
+    setTrackingMode(null);
     setPhase("idle");
     setConnection("idle");
     setNotice(next);
@@ -252,6 +298,7 @@ export function useLiveDetection(
     current.inFlight = current.frameId;
     current.sentAt = deps.current.now();
     current.lastSentAt = current.sentAt;
+    current.sendTimes.push(current.sentAt);
     socket.send(encodeFrame(current.frameId, frame.buffer));
   };
 
@@ -261,17 +308,39 @@ export function useLiveDetection(
         current.intervalMs = 1000 / Math.max(1, Math.min(LIVE_TARGET_FPS, message.maxFps));
         // Fresh state per session: track IDs of an earlier session or camera are never reused.
         current.trails = message.tracking ? new TrackTrails() : null;
+        current.clientTracking = message.trackingMode === "CLIENT";
+        if (current.clientTracking) {
+          // One tracker per session in a Web Worker: IDs start at 1 and never leak between sessions.
+          current.tracker = new LiveTrackerClient(message.sessionId, {
+            ...DEFAULT_TRACKER_CONFIG,
+            confidence: current.confidence,
+            lowScoreFloor: Math.min(current.confidence, 0.1), // the worker's floor, also reported per frame
+          }, deps.current.trackerWorker, (problem) => {
+            current.tracker?.close();
+            current.tracker = null;
+            setNotice({ tone: "warning",
+              text: `Tracking in the browser stopped (${problem}). Detections continue without Track IDs.` });
+          });
+        }
         setTracking(message.tracking);
+        setTrackingMode(message.trackingMode);
         setPhase("running");
         setConnection("live");
         schedule(current, 0);
         break;
       case "detections": {
         if (message.frameId !== current.inFlight) return; // stale or out of order
+        if (current.clientTracking) {
+          receiveForClientTracking(current, message);
+          return;
+        }
         const now = deps.current.now();
         current.latencyMs = now - current.sentAt;
         current.inferenceMs = message.inferenceMs;
         current.processed += 1;
+        current.roundTripMs = current.latencyMs;
+        current.device = message.device;
+        current.precision = message.precision;
         current.detections = message.detections.length;
         current.activeTracks = message.tracking ? message.activeTracks ?? 0 : null;
         if (message.tracking) current.trails?.update(message.detections);
@@ -308,6 +377,55 @@ export function useLiveDetection(
     }
   };
 
+  /** Draws one result on the overlay; never an older frame than the one already shown. */
+  const render = (current: Run, result: LiveDetections) => {
+    if (result.frameId <= current.lastDrawnFrameId) return;
+    current.lastDrawnFrameId = result.frameId;
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (canvas && video) {
+      drawDetections(canvas, result, mirroredRef.current,
+        { width: video.videoWidth || result.width, height: video.videoHeight || result.height }, current.trails);
+    }
+  };
+
+  /**
+   * CLIENT tracking: the worker returned tracker input. The camera pipeline continues at once (the next
+   * frame is not held back by tracking); the result is drawn when the browser's ByteTrack has run.
+   */
+  const receiveForClientTracking = (current: Run, message: LiveDetections) => {
+    const sentAt = current.sentAt;
+    current.roundTripMs = deps.current.now() - sentAt;
+    current.inferenceMs = message.inferenceMs;
+    current.device = message.device;
+    current.precision = message.precision;
+    current.processed += 1;
+    current.inFlight = null;
+    schedule(current);
+    const finishDraw = (detections: LiveDetection[], activeTracks: number | null, tracking: boolean) => {
+      if (current.stopped) return;
+      const drawnAt = deps.current.now();
+      current.latencyMs = drawnAt - sentAt;
+      current.detections = detections.length;
+      current.activeTracks = activeTracks;
+      current.resultTimes.push(drawnAt);
+      if (tracking) current.trails?.update(detections);
+      render(current, { ...message, detections, tracking, activeTracks });
+    };
+    const tracker = current.tracker;
+    if (!tracker) {
+      // Tracking unavailable: show the detections at the confidence threshold, without IDs.
+      finishDraw(message.detections.filter((d) => d.confidence >= current.confidence), null, false);
+      return;
+    }
+    void tracker.track(message.frameId, sentAt, message.width, message.height, message.detections)
+      .then((tracked) => {
+        if (!tracked || current.stopped) return; // stale frame or session ended
+        current.trackingMs = tracked.trackingMs;
+        finishDraw(tracked.objects as LiveDetection[], tracked.activeTracks, true);
+      });
+  };
+
   const start = useCallback(async (settings: LiveSettings) => {
     if (run.current) return;
     const problem = cameraSupportProblem();
@@ -321,6 +439,8 @@ export function useLiveDetection(
       stopped: false, socket: null, stream: null, frameId: 0, inFlight: null, sentAt: 0, lastSentAt: -Infinity,
       capturing: false, intervalMs: 1000 / LIVE_TARGET_FPS, timer: null, resultTimes: [], processed: 0,
       dropped: 0, latencyMs: null, inferenceMs: null, detections: 0, activeTracks: null, trails: null,
+      tracker: null, clientTracking: false, confidence: settings.confidence, sendTimes: [], roundTripMs: null,
+      trackingMs: null, device: null, precision: null, lastDrawnFrameId: 0,
     };
     run.current = current;
     setNotice(null);
@@ -360,7 +480,11 @@ export function useLiveDetection(
     current.socket = socket;
     socket.binaryType = "arraybuffer";
     socket.onopen = () => {
-      socket.send(JSON.stringify({ type: "start", version: LIVE_PROTOCOL_VERSION, ...settings }));
+      const { trackingMode, ...rest } = settings;
+      socket.send(JSON.stringify({
+        type: "start", version: LIVE_PROTOCOL_VERSION, ...rest,
+        ...(settings.tracking && trackingMode ? { trackingMode } : {}),
+      }));
     };
     socket.onmessage = (event: MessageEvent) => {
       if (typeof event.data !== "string") return;
@@ -396,6 +520,6 @@ export function useLiveDetection(
 
   return {
     phase, connection, metrics, notice, cameras, cameraId, setCameraId, mirrored, setMirrored, tracking,
-    start, stop, dismissNotice: () => setNotice(null),
+    trackingMode, start, stop, dismissNotice: () => setNotice(null),
   };
 }

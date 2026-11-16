@@ -12,7 +12,8 @@ import { useLiveDetection, type LiveDependencies } from "../hooks/useLiveDetecti
 import { VEHICLE_CLASS_IDS } from "../lib/cocoClasses";
 import { DEFAULT_CONFIDENCE, parseConfidence } from "../lib/detectionForm";
 import { sizeName } from "../lib/format";
-import { LIVE_DEFAULT_IMAGE_SIZE, LIVE_IMAGE_SIZES } from "../lib/liveProtocol";
+import { LIVE_DEFAULT_IMAGE_SIZE, LIVE_IMAGE_SIZES, type LiveTrackingMode } from "../lib/liveProtocol";
+import { deviceLabel } from "../lib/precision";
 import type { ModelConfig } from "../types/models";
 
 /** Live Detection supports only lightweight (Nano) detection models; the server enforces it too. */
@@ -38,6 +39,8 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
   const [confidence, setConfidence] = useState(DEFAULT_CONFIDENCE.toFixed(2));
   const [imageSize, setImageSize] = useState<number>(LIVE_DEFAULT_IMAGE_SIZE);
   const [tracking, setTracking] = useState(false);
+  /** Browser tracking is the default; the server (live worker) path is kept for comparison. */
+  const [trackingMode, setTrackingMode] = useState<LiveTrackingMode>("CLIENT");
   const cameraSelectId = useId();
   const modelSelectId = useId();
 
@@ -58,7 +61,7 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
 
   const start = () => {
     if (!canStart || parsedConfidence === null) return;
-    void live.start({ modelKey, confidence: parsedConfidence, imageSize, classes, tracking });
+    void live.start({ modelKey, confidence: parsedConfidence, imageSize, classes, tracking, trackingMode });
   };
 
   const statusText = live.phase === "starting"
@@ -99,8 +102,14 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
 
         <dl className="live-metrics" aria-label="Live detection metrics">
           <div><dt>Processed FPS</dt><dd>{formatMetric(live.metrics.fps, 1, "")}</dd></div>
+          <div><dt>Sent FPS</dt><dd>{formatMetric(live.metrics.submittedFps, 1, "")}</dd></div>
           <div><dt>Latency</dt><dd>{formatMetric(live.metrics.latencyMs, 0, " ms")}</dd></div>
+          <div><dt>Round trip</dt><dd>{formatMetric(live.metrics.roundTripMs, 0, " ms")}</dd></div>
           <div><dt>Inference</dt><dd>{formatMetric(live.metrics.inferenceMs, 0, " ms")}</dd></div>
+          {running && live.trackingMode === "CLIENT" && (
+            <div><dt>Tracking (browser)</dt><dd>{formatMetric(live.metrics.trackingMs, 1, " ms")}</dd></div>
+          )}
+          <div><dt>Device</dt><dd>{running && live.metrics.device ? deviceLabel(live.metrics.device) : "—"}</dd></div>
           <div><dt>Frames</dt><dd>{live.metrics.processed}</dd></div>
           <div><dt>Dropped</dt><dd>{live.metrics.dropped}</dd></div>
           <div><dt>Objects</dt><dd>{running ? live.metrics.detections : "—"}</dd></div>
@@ -196,6 +205,21 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
           onChange={setTracking}
           description="Assign persistent IDs to detected objects across camera frames. IDs start fresh with every session."
         />
+        {tracking && (
+          <fieldset className="live-tracking-mode" disabled={busy}>
+            <legend>Track in</legend>
+            <label>
+              <input type="radio" name="live-tracking-mode" value="CLIENT" checked={trackingMode === "CLIENT"}
+                onChange={() => setTrackingMode("CLIENT")} />
+              Browser <span className="field-hint">(default: ByteTrack in a Web Worker on this device)</span>
+            </label>
+            <label>
+              <input type="radio" name="live-tracking-mode" value="SERVER" checked={trackingMode === "SERVER"}
+                onChange={() => setTrackingMode("SERVER")} />
+              Server <span className="field-hint">(legacy: ByteTrack in the live worker)</span>
+            </label>
+          </fieldset>
+        )}
 
         <Disclosure
           label="Advanced settings"

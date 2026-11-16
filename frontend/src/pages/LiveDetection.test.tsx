@@ -4,6 +4,7 @@ import { listModels } from "../api/models";
 import type { CapturedFrame, LiveDependencies } from "../hooks/useLiveDetection";
 import { model } from "../test/fixtures";
 import { renderAt } from "../test/render";
+import { InProcessTrackerWorker } from "../lib/tracking/trackerClient";
 import { LiveDetection } from "./LiveDetection";
 
 vi.mock("../api/models", () => ({ listModels: vi.fn(), getModelVersions: vi.fn(), getModel: vi.fn() }));
@@ -414,5 +415,91 @@ describe("Live Detection page", () => {
     expect((screen.getByLabelText("AI model") as HTMLSelectElement).disabled).toBe(true);
     expect((screen.getByLabelText("Camera") as HTMLSelectElement).disabled).toBe(true);
     expect((startButton() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+
+describe("Live Detection with browser tracking (Web Worker ByteTrack)", () => {
+  const clientInput = (frameId: number, x: number) => ({
+    ...detections(frameId, 0), trackingMode: "CLIENT", lowScoreFloor: 0.1, device: "cuda:0", precision: "FP32",
+    detections: [
+      { classId: 2, label: "car", confidence: 0.87, box: [x, 85, x + 190, 260] },
+      { classId: 2, label: "car", confidence: 0.15, box: [500, 300, 560, 340] }, // low-score, no track
+    ],
+  });
+
+  async function startClientSession(trackerWorker?: () => InProcessTrackerWorker) {
+    renderAt("/live", "/live", <LiveDetection dependencies={{ ...dependencies(),
+      ...(trackerWorker ? { trackerWorker } : {}) }} />);
+    await waitFor(() => expect((startButton() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: /Object tracking/ }));
+    fireEvent.click(startButton());
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    const socket = FakeSocket.instances[0];
+    act(() => socket.open());
+    act(() => socket.serverSends({ type: "ready", sessionId: "s-1", modelKey: "yolo11n", maxFps: 5,
+      maxFrameBytes: 524288, maxInFlight: 1, tracking: true, tracker: "bytetrack", trackingMode: "CLIENT" }));
+    await waitFor(() => expect(socket.frames()).toHaveLength(1));
+    return socket;
+  }
+
+  it("asks the server for tracker input by default and assigns Track IDs in the browser", async () => {
+    const socket = await startClientSession();
+    expect(socket.texts()[0]).toMatchObject({ type: "start", tracking: true, trackingMode: "CLIENT" });
+
+    act(() => socket.serverSends(clientInput(1, 120)));
+    await waitFor(() => expect(context.fillText).toHaveBeenCalledWith("Car #1 · 87%", expect.any(Number),
+      expect.any(Number)));
+    // The 0.15 box only feeds ByteTrack's second association; it is never drawn on its own.
+    expect(context.fillText).not.toHaveBeenCalledWith("Car 15%", expect.any(Number), expect.any(Number));
+
+    await waitFor(() => expect(socket.frames()).toEqual([1, 2]));
+    context.fillText.mockClear();
+    act(() => socket.serverSends(clientInput(2, 128)));
+    await waitFor(() => expect(context.fillText).toHaveBeenCalledWith("Car #1 · 87%", expect.any(Number),
+      expect.any(Number)));
+    await waitFor(() => expect(screen.getByText("Active tracks").nextElementSibling?.textContent).toBe("1"));
+    expect(screen.getByText("Tracking (browser)")).toBeTruthy();
+    expect(screen.getByText("Device").nextElementSibling?.textContent).toBe("GPU (cuda:0)");
+  });
+
+  it("can still use the server tracker", async () => {
+    renderLive();
+    await waitFor(() => expect((startButton() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("switch", { name: /Object tracking/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Server/ }));
+    fireEvent.click(startButton());
+    await waitFor(() => expect(FakeSocket.instances).toHaveLength(1));
+    act(() => FakeSocket.instances[0].open());
+
+    expect(FakeSocket.instances[0].texts()[0]).toMatchObject({ tracking: true, trackingMode: "SERVER" });
+  });
+
+  it("terminates the tracking worker when the session stops", async () => {
+    const workers: InProcessTrackerWorker[] = [];
+    const factory = () => {
+      const worker = new InProcessTrackerWorker();
+      vi.spyOn(worker, "terminate");
+      workers.push(worker);
+      return worker;
+    };
+    await startClientSession(factory);
+    expect(workers).toHaveLength(1);
+
+    fireEvent.click(stopButton());
+
+    expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps showing detections without IDs when the tracking worker fails", async () => {
+    let failing: InProcessTrackerWorker | null = null;
+    const socket = await startClientSession(() => (failing = new InProcessTrackerWorker()));
+    act(() => failing!.onerror?.({ message: "worker crashed" } as ErrorEvent));
+
+    act(() => socket.serverSends(clientInput(1, 120)));
+
+    await waitFor(() => expect(context.fillText).toHaveBeenCalledWith("Car 87%", expect.any(Number),
+      expect.any(Number)));
+    expect(screen.getByText(/Tracking in the browser stopped \(worker crashed\)/)).toBeTruthy();
   });
 });

@@ -1,4 +1,5 @@
 import type { TrackerConfig, TrackerDetection } from "./byteTracker";
+import { TrackerHost } from "./trackerHost";
 import type { TrackerRequest, TrackerResponse } from "./trackerProtocol";
 
 export type TrackedFrame = Extract<TrackerResponse, { type: "TRACKED" }>;
@@ -11,8 +12,37 @@ export interface WorkerLike {
   onerror: ((event: ErrorEvent) => void) | null;
 }
 
+/**
+ * The same TrackerHost on the main thread, asynchronously. Used only where module Web Workers are
+ * unavailable (old browsers, tests); results are identical, only the thread differs.
+ */
+export class InProcessTrackerWorker implements WorkerLike {
+  onmessage: ((event: MessageEvent<TrackerResponse>) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  private readonly host = new TrackerHost();
+  private terminated = false;
+
+  postMessage(message: TrackerRequest): void {
+    queueMicrotask(() => {
+      if (this.terminated) return;
+      for (const response of this.host.handle(message)) {
+        this.onmessage?.({ data: response } as MessageEvent<TrackerResponse>);
+      }
+    });
+  }
+
+  terminate(): void {
+    this.terminated = true;
+  }
+}
+
 export function createTrackerWorker(): WorkerLike {
-  return new Worker(new URL("../../workers/tracker.worker.ts", import.meta.url), { type: "module" }) as WorkerLike;
+  if (typeof Worker === "undefined") return new InProcessTrackerWorker();
+  try {
+    return new Worker(new URL("../../workers/tracker.worker.ts", import.meta.url), { type: "module" }) as WorkerLike;
+  } catch {
+    return new InProcessTrackerWorker();
+  }
 }
 
 /**
