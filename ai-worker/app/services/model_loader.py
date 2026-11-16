@@ -21,6 +21,16 @@ from app.services.model_registry import (
 logger = logging.getLogger(__name__)
 
 
+def describe_device(torch: Any, device: str) -> str:
+    """Log label of a device, e.g. "cuda:0 (NVIDIA GeForce GTX 1650)"; never raises."""
+    if device.startswith("cuda"):
+        try:
+            return f"{device} ({torch.cuda.get_device_name(0)})"
+        except Exception:
+            return device
+    return device
+
+
 def openvino_available() -> bool:
     """Whether the optional OpenVINO runtime is installed (checked without importing it)."""
     return find_spec("openvino") is not None
@@ -112,14 +122,19 @@ class ModelLoader:
             raise ModelLoadingError(
                 "PyTorch could not be imported. Install the optional AI dependencies and required runtime libraries."
             ) from error
-        actual_device = self._select_device(torch, requested_device)
         requested_precision = precision or self.settings.model_precision
         if requested_precision not in {"fp32", "int8"}:
             raise ModelLoadingError("Precision must be fp32 or int8.")
+        # INT8 is an OpenVINO CPU artifact: with the "auto" policy it runs on the CPU even when a GPU
+        # is present (FP32 jobs still use the GPU). An explicit cuda:0 request stays an error below.
+        policy_device = "cpu" if requested_precision == "int8" and requested_device == "auto" else requested_device
+        actual_device = self._select_device(torch, policy_device)
         int8_artifact = None
         strict = precision is not None or not self.settings.int8_fallback_to_fp32
         if requested_precision == "int8":
             int8_artifact = self._int8_artifact(spec, actual_device, strict)
+            if int8_artifact is None:  # FP32 fallback: the normal device policy applies again (GPU if auto)
+                actual_device = self._select_device(torch, requested_device)
         cache_dir = self.settings.model_cache_dir.expanduser().resolve()
         cache_key = (str(cache_dir), model_key, actual_device, "int8" if int8_artifact is not None else "fp32")
         with self._load_lock:
@@ -133,6 +148,7 @@ class ModelLoader:
                         raise
                     logger.warning("Using the FP32 model for %s; the INT8 runtime could not be initialised (%s)",
                                    model_key, error.__cause__ or error)
+                    actual_device = self._select_device(torch, requested_device)
                     cache_key = (str(cache_dir), model_key, actual_device, "fp32")
                     if cache_key in self._cache:
                         return self._cache[cache_key]
@@ -151,7 +167,7 @@ class ModelLoader:
                 ultralytics = importlib.import_module("ultralytics")
                 if actual_device == "cpu":
                     torch.set_num_threads(self.settings.cpu_threads)
-                logger.info("Loading model %s on %s (fp32, PyTorch)", model_key, actual_device)
+                logger.info("Loading model %s on %s (fp32, PyTorch)", model_key, describe_device(torch, actual_device))
                 model = ultralytics.YOLO(str(weights))
                 model.to(actual_device)
                 raw_names = model.names
@@ -266,7 +282,9 @@ class ModelLoader:
             available = bool(torch.cuda.is_available())
             if requested == "cuda:0":
                 if not available or torch.cuda.device_count() < 1:
-                    raise ModelLoadingError("CUDA device 0 was requested, but CUDA is unavailable.")
+                    raise ModelLoadingError(
+                        "CUDA device 0 was requested, but CUDA is unavailable. Use AI_DEVICE=auto or cpu, or run "
+                        "the GPU image (TORCH_VARIANT=cu126) with GPU access (compose.gpu.yaml).")
                 return "cuda:0"
             return "cuda:0" if available else "cpu"
         except ModelLoadingError:

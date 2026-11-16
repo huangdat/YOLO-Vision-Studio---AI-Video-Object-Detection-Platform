@@ -94,6 +94,8 @@ export interface DetectionResultMetadata {
   /** What the worker actually ran; null for results stored before workers reported it. */
   effectivePrecision: InferencePrecision | null;
   inferenceRuntime: InferenceRuntime | null;
+  /** Device the model ran on ("cpu", "cuda:0"); null when the worker did not report it. */
+  inferenceDevice: string | null;
 }
 
 /**

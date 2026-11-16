@@ -197,6 +197,7 @@ class DetectionJobLifecycleServiceTest {
         DetectionResult result = results.findByJob_Id(jobId).orElseThrow();
         assertThat(result.getEffectivePrecision()).isEqualTo(InferencePrecision.INT8);
         assertThat(result.getInferenceRuntime()).isEqualTo(InferenceRuntime.OPENVINO);
+        assertThat(result.getInferenceDevice()).isEqualTo("cpu");
     }
 
     @Test
@@ -358,7 +359,7 @@ class DetectionJobLifecycleServiceTest {
         return new DetectionEventMessage(1, UUID.randomUUID(), jobId, DetectionEventStatus.COMPLETED, 100, 36, 36,
                 "Completed", Instant.now(), "yolo11n", new DetectionEventMessage.Result(
                         "detections/" + jobId + "/detected.mp4", "detections/" + jobId + "/result.json",
-                        36, 7058L, Map.of("bus", 36L), null, null, precision, runtime), null);
+                        36, 7058L, Map.of("bus", 36L), null, null, precision, runtime, "cpu"), null);
     }
 
     private DetectionEventMessage completedWithTracking() {

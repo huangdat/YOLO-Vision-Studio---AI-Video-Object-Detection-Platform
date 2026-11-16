@@ -149,21 +149,31 @@ describe("Detection details page", () => {
   it("shows the requested and the executed precision from the worker result", async () => {
     vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100, inferencePrecision: "INT8" }));
     vi.mocked(getDetectionResult).mockResolvedValueOnce(
-      result({ effectivePrecision: "INT8", inferenceRuntime: "OPENVINO" }));
+      result({ effectivePrecision: "INT8", inferenceRuntime: "OPENVINO", inferenceDevice: "cpu" }));
     renderJob();
 
-    expect(await screen.findByText("Executed: OpenVINO INT8")).toBeTruthy();
+    expect(await screen.findByText("Executed: OpenVINO INT8 · CPU")).toBeTruthy();
     expect(screen.getByText("Requested: INT8")).toBeTruthy();
   });
 
   it("never derives the executed precision from the request", async () => {
     vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100, inferencePrecision: null }));
-    vi.mocked(getDetectionResult).mockResolvedValueOnce(result({ effectivePrecision: null, inferenceRuntime: null }));
+    vi.mocked(getDetectionResult).mockResolvedValueOnce(
+      result({ effectivePrecision: null, inferenceRuntime: null, inferenceDevice: null }));
     renderJob();
 
     expect(await screen.findByText("Executed: Not reported by the worker")).toBeTruthy();
     expect(screen.getByText("Requested: Not recorded")).toBeTruthy();
     expect(screen.queryByText(/OpenVINO|PyTorch/)).toBeNull();
+  });
+
+  it("shows the GPU a job ran on", async () => {
+    vi.mocked(getDetection).mockResolvedValue(job({ status: "COMPLETED", progress: 100, inferencePrecision: "FP32" }));
+    vi.mocked(getDetectionResult).mockResolvedValueOnce(
+      result({ effectivePrecision: "FP32", inferenceRuntime: "PYTORCH", inferenceDevice: "cuda:0" }));
+    renderJob();
+
+    expect(await screen.findByText("Executed: PyTorch FP32 · GPU (cuda:0)")).toBeTruthy();
   });
 
   it("shows a pending execution for jobs that have not completed", async () => {

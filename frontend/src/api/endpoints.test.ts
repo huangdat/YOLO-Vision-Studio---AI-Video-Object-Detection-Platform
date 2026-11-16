@@ -132,7 +132,7 @@ describe("detection API", () => {
 
   it("parses requested and effective precision, keeping legacy values neutral", async () => {
     const { inferencePrecision: _job, ...legacyJob } = job();
-    const { effectivePrecision: _e, inferenceRuntime: _r, ...legacyResult } = result();
+    const { effectivePrecision: _e, inferenceRuntime: _r, inferenceDevice: _d, ...legacyResult } = result();
     const { inferencePrecision: _row, ...legacyRow } = summary();
     vi.spyOn(apiClient, "get")
       .mockResolvedValueOnce({ data: job({ inferencePrecision: "INT8" }) })
@@ -145,16 +145,19 @@ describe("detection API", () => {
     expect(await getDetectionResult(JOB_ID)).toMatchObject({ effectivePrecision: "INT8", inferenceRuntime: "OPENVINO" });
     // Backends without precision support: null, never a guessed FP32 or runtime.
     expect((await getDetection(JOB_ID)).inferencePrecision).toBeNull();
-    expect(await getDetectionResult(JOB_ID)).toMatchObject({ effectivePrecision: null, inferenceRuntime: null });
+    expect(await getDetectionResult(JOB_ID)).toMatchObject(
+      { effectivePrecision: null, inferenceRuntime: null, inferenceDevice: null });
     expect((await listDetections()).content[0].inferencePrecision).toBeNull();
   });
 
   it("rejects unknown precisions and runtimes", async () => {
     vi.spyOn(apiClient, "get")
       .mockResolvedValueOnce({ data: { ...job(), inferencePrecision: "FP16" } })
-      .mockResolvedValueOnce({ data: { ...result(), inferenceRuntime: "TENSORRT" } });
+      .mockResolvedValueOnce({ data: { ...result(), inferenceRuntime: "TENSORRT" } })
+      .mockResolvedValueOnce({ data: { ...result(), inferenceDevice: "tpu:0" } });
 
     await expect(getDetection(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
+    await expect(getDetectionResult(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
     await expect(getDetectionResult(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
   });
 

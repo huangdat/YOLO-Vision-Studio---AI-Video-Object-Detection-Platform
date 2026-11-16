@@ -42,7 +42,8 @@ public record DetectionEventMessage(
             ProcessingMode processingMode,
             @Valid Tracking tracking,
             InferencePrecision effectivePrecision,
-            InferenceRuntime inferenceRuntime) {
+            InferenceRuntime inferenceRuntime,
+            @Pattern(regexp = "^(cpu|cuda:[0-9]{1,2})$") String inferenceDevice) {
 
         /** Completion of a detection-only job (no tracking fields), as sent by every worker version. */
         public Result(String outputVideoKey, String resultJsonKey, Integer totalFrames, Long processingTimeMs,
@@ -54,7 +55,15 @@ public record DetectionEventMessage(
         public Result(String outputVideoKey, String resultJsonKey, Integer totalFrames, Long processingTimeMs,
                 Map<String, Long> detectionSummary, ProcessingMode processingMode, Tracking tracking) {
             this(outputVideoKey, resultJsonKey, totalFrames, processingTimeMs, detectionSummary, processingMode,
-                    tracking, null, null);
+                    tracking, null, null, null);
+        }
+
+        /** Completion from a worker that reports precision but not the device. */
+        public Result(String outputVideoKey, String resultJsonKey, Integer totalFrames, Long processingTimeMs,
+                Map<String, Long> detectionSummary, ProcessingMode processingMode, Tracking tracking,
+                InferencePrecision effectivePrecision, InferenceRuntime inferenceRuntime) {
+            this(outputVideoKey, resultJsonKey, totalFrames, processingTimeMs, detectionSummary, processingMode,
+                    tracking, effectivePrecision, inferenceRuntime, null);
         }
     }
 

@@ -218,6 +218,7 @@ class DetectionApiIntegrationTest {
                 Map.of("car", 3L));
         result.setEffectivePrecision(InferencePrecision.INT8);
         result.setInferenceRuntime(InferenceRuntime.OPENVINO);
+        result.setInferenceDevice("cpu");
         results.saveAndFlush(result);
         DetectionJob legacy = job(yolo11n, DetectionJobStatus.COMPLETED, 100);
         results.saveAndFlush(new DetectionResult(legacy, "detections/" + legacy.getId() + "/detected.mp4",
@@ -226,7 +227,8 @@ class DetectionApiIntegrationTest {
         mockMvc.perform(get("/api/v1/detections/" + job.getId() + "/result"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.effectivePrecision").value("INT8"))
-                .andExpect(jsonPath("$.inferenceRuntime").value("OPENVINO"));
+                .andExpect(jsonPath("$.inferenceRuntime").value("OPENVINO"))
+                .andExpect(jsonPath("$.inferenceDevice").value("cpu"));
         String legacyBody = mockMvc.perform(get("/api/v1/detections/" + legacy.getId() + "/result"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

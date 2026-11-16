@@ -369,6 +369,7 @@ class DetectionJobProcessor:
                     ) if tracking is not None else None,
                     effective_precision=InferencePrecision(effective) if effective is not None else None,
                     inference_runtime=InferenceRuntime(runtime) if runtime is not None else None,
+                    inference_device=statistics.get("device"),
                 ),
             )
         except (KeyError, TypeError, ValueError, ValidationError) as error:

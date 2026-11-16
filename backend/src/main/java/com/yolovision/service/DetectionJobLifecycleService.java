@@ -173,6 +173,7 @@ public class DetectionJobLifecycleService {
             result.setTrackingSummary(trackingSummary(job, payload));
             result.setEffectivePrecision(effective);
             result.setInferenceRuntime(payload.inferenceRuntime());
+            result.setInferenceDevice(payload.inferenceDevice());
             results.save(result);
         }
         Instant now = Instant.now();
