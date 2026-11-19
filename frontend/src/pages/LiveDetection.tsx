@@ -101,8 +101,10 @@ export function LiveDetection({ dependencies }: { dependencies?: Partial<LiveDep
         </div>
 
         <dl className="live-metrics" aria-label="Live detection metrics">
-          <div><dt>Processed FPS</dt><dd>{formatMetric(live.metrics.fps, 1, "")}</dd></div>
+          <div><dt>Camera FPS</dt><dd>{formatMetric(running ? live.metrics.cameraFps : null, 0, "")}</dd></div>
           <div><dt>Sent FPS</dt><dd>{formatMetric(live.metrics.submittedFps, 1, "")}</dd></div>
+          <div><dt>Processed FPS</dt><dd>{formatMetric(live.metrics.fps, 1, "")}</dd></div>
+          <div><dt>Rendered FPS</dt><dd>{formatMetric(live.metrics.renderedFps, 1, "")}</dd></div>
           <div><dt>Latency</dt><dd>{formatMetric(live.metrics.latencyMs, 0, " ms")}</dd></div>
           <div><dt>Round trip</dt><dd>{formatMetric(live.metrics.roundTripMs, 0, " ms")}</dd></div>
           <div><dt>Inference</dt><dd>{formatMetric(live.metrics.inferenceMs, 0, " ms")}</dd></div>

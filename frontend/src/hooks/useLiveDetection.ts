@@ -61,6 +61,10 @@ export interface LiveMetrics {
   /** Device and precision the worker reported for the last frame. */
   device: string | null;
   precision: string | null;
+  /** Frame rate the camera delivers (from the video track settings), not the submitted rate. */
+  cameraFps: number | null;
+  /** Overlay redraws per second for new results (stale results are never drawn). */
+  renderedFps: number | null;
 }
 
 export interface LiveNotice {
@@ -145,11 +149,16 @@ interface Run {
   device: string | null;
   precision: string | null;
   lastDrawnFrameId: number;
+  /** The result on the overlay, redrawn when the canvas is resized or the preview is mirrored. */
+  lastResult: LiveDetections | null;
+  renderTimes: number[];
+  cameraFps: number | null;
 }
 
 const EMPTY_METRICS: LiveMetrics = {
   fps: null, latencyMs: null, inferenceMs: null, processed: 0, dropped: 0, detections: 0, activeTracks: null,
-  submittedFps: null, roundTripMs: null, trackingMs: null, device: null, precision: null,
+  submittedFps: null, roundTripMs: null, trackingMs: null, device: null, precision: null, cameraFps: null,
+  renderedFps: null,
 };
 
 const rate = (times: number[], now: number): [number[], number | null] => {
@@ -205,11 +214,15 @@ export function useLiveDetection(
     const now = deps.current.now();
     const [results, fps] = rate(current.resultTimes, now);
     const [sends, submittedFps] = rate(current.sendTimes, now);
+    const [renders, renderedFps] = rate(current.renderTimes, now);
     current.resultTimes = results;
     current.sendTimes = sends;
+    current.renderTimes = renders;
     return {
       fps,
       submittedFps,
+      renderedFps,
+      cameraFps: current.cameraFps,
       roundTripMs: current.roundTripMs,
       trackingMs: current.trackingMs,
       device: current.device,
@@ -251,6 +264,7 @@ export function useLiveDetection(
     current.tracker = null;
     current.trails?.clear();
     current.trails = null;
+    current.lastResult = null;
     const video = videoRef.current;
     if (video) video.srcObject = null;
     clearOverlay(canvasRef.current);
@@ -345,13 +359,7 @@ export function useLiveDetection(
         current.activeTracks = message.tracking ? message.activeTracks ?? 0 : null;
         if (message.tracking) current.trails?.update(message.detections);
         current.resultTimes.push(now);
-        const canvas = canvasRef.current;
-        const video = videoRef.current;
-        if (canvas && video) {
-          drawDetections(canvas, message, mirroredRef.current,
-            { width: video.videoWidth || message.width, height: video.videoHeight || message.height },
-            current.trails);
-        }
+        paint(current, message);
         current.inFlight = null;
         schedule(current);
         break;
@@ -377,16 +385,30 @@ export function useLiveDetection(
     }
   };
 
+  /**
+   * Draws the current result, mapped onto where the video is displayed now: the overlay follows
+   * letterboxing (object-fit: contain), the element size and the device pixel ratio at draw time.
+   */
+  const redraw = (current: Run) => {
+    const result = current.lastResult;
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!result || !canvas || !video) return;
+    drawDetections(canvas, result, mirroredRef.current,
+      { width: video.videoWidth || result.width, height: video.videoHeight || result.height }, current.trails);
+  };
+
+  const paint = (current: Run, result: LiveDetections) => {
+    current.lastResult = result;
+    current.renderTimes.push(deps.current.now());
+    redraw(current);
+  };
+
   /** Draws one result on the overlay; never an older frame than the one already shown. */
   const render = (current: Run, result: LiveDetections) => {
     if (result.frameId <= current.lastDrawnFrameId) return;
     current.lastDrawnFrameId = result.frameId;
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (canvas && video) {
-      drawDetections(canvas, result, mirroredRef.current,
-        { width: video.videoWidth || result.width, height: video.videoHeight || result.height }, current.trails);
-    }
+    paint(current, result);
   };
 
   /**
@@ -440,7 +462,8 @@ export function useLiveDetection(
       capturing: false, intervalMs: 1000 / LIVE_TARGET_FPS, timer: null, resultTimes: [], processed: 0,
       dropped: 0, latencyMs: null, inferenceMs: null, detections: 0, activeTracks: null, trails: null,
       tracker: null, clientTracking: false, confidence: settings.confidence, sendTimes: [], roundTripMs: null,
-      trackingMs: null, device: null, precision: null, lastDrawnFrameId: 0,
+      trackingMs: null, device: null, precision: null, lastDrawnFrameId: 0, lastResult: null, renderTimes: [],
+      cameraFps: null,
     };
     run.current = current;
     setNotice(null);
@@ -460,6 +483,8 @@ export function useLiveDetection(
       return;
     }
     current.stream = stream;
+    const frameRate = stream.getVideoTracks()[0]?.getSettings?.().frameRate;
+    current.cameraFps = typeof frameRate === "number" && frameRate > 0 ? frameRate : null;
     stream.getVideoTracks().forEach((track) => track.addEventListener("ended", () =>
       finish({ tone: "warning", text: "The camera was disconnected." })));
     const video = videoRef.current;
@@ -506,6 +531,27 @@ export function useLiveDetection(
     }, 500);
     return () => clearInterval(interval);
   }, [phase]);
+
+  // Keep the overlay aligned between results: redraw on element resize, browser zoom (device pixel
+  // ratio) and window resize, and when the preview is mirrored.
+  useEffect(() => {
+    if (phase !== "running") return;
+    const repaint = () => {
+      if (run.current) redraw(run.current);
+    };
+    const canvas = canvasRef.current;
+    const observer = typeof ResizeObserver === "undefined" || !canvas ? null : new ResizeObserver(repaint);
+    if (observer && canvas) observer.observe(canvas);
+    window.addEventListener("resize", repaint);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", repaint);
+    };
+  }, [phase, canvasRef]);
+
+  useEffect(() => {
+    if (run.current) redraw(run.current);
+  }, [mirrored]);
 
   useEffect(() => {
     void refreshCameras();

@@ -285,6 +285,35 @@ describe("Live Detection page", () => {
     expect(within(metrics).getByText("Latency").nextElementSibling?.textContent).toMatch(/^\d+ ms$/);
   });
 
+  it("shows the camera frame rate and the rendered frame rate", async () => {
+    Object.assign(track, { getSettings: () => ({ frameRate: 30, width: 1280, height: 720 }) });
+    const { socket } = await startSession();
+    act(() => socket.serverSends(detections(1)));
+    await waitFor(() => expect(socket.frames()).toHaveLength(2));
+    act(() => socket.serverSends(detections(2)));
+    const metrics = screen.getByLabelText("Live detection metrics");
+    await waitFor(() => expect(within(metrics).getByText("Camera FPS").nextElementSibling?.textContent).toBe("30"),
+      { timeout: 2000 });
+    await waitFor(() => expect(within(metrics).getByText("Rendered FPS").nextElementSibling?.textContent)
+      .toMatch(/^\d+(\.\d)?$/), { timeout: 2000 });
+  });
+
+  it("redraws the last result when the window is resized, without waiting for a new frame", async () => {
+    const { socket } = await startSession();
+    act(() => socket.serverSends(detections(1)));
+    expect(context.strokeRect).toHaveBeenCalledTimes(1);
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(context.strokeRect).toHaveBeenCalledTimes(2);
+    expect(context.fillText).toHaveBeenLastCalledWith("Car 87%", expect.any(Number), expect.any(Number));
+    fireEvent.click(stopButton());
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(context.strokeRect).toHaveBeenCalledTimes(2); // nothing is redrawn after the session ends
+  });
+
   it("shows a non-fatal frame error and keeps going", async () => {
     const { socket } = await startSession();
     act(() => socket.serverSends({ type: "error", code: "INFERENCE_TIMEOUT", message: "slow", fatal: false, frameId: 1 }));
