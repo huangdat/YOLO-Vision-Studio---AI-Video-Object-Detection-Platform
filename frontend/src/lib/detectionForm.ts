@@ -1,6 +1,7 @@
-import type { CreateDetectionRequest } from "../types/detections";
+import type { CreateDetectionRequest, InferencePrecision } from "../types/detections";
 import type { ModelConfig } from "../types/models";
 import { isKnownClass, VEHICLE_CLASS_IDS } from "./cocoClasses";
+import { DEFAULT_PRECISION } from "./precision";
 import { checkYouTubeUrl } from "./youtube";
 
 /** Inference sizes offered in the workspace; all are backend-valid multiples of 32. */
@@ -18,6 +19,8 @@ export interface DetectionFormState {
   classes: number[];
   /** Object tracking (ByteTrack); off by default. */
   tracking: boolean;
+  /** Inference precision; FP32 by default, INT8 is opt-in. */
+  precision: InferencePrecision;
 }
 
 export type FormField = "videoUrl" | "modelKey" | "confidence" | "imageSize" | "classes";
@@ -30,6 +33,7 @@ export function initialFormState(): DetectionFormState {
     imageSize: DEFAULT_IMAGE_SIZE,
     classes: [...VEHICLE_CLASS_IDS],
     tracking: false,
+    precision: DEFAULT_PRECISION,
   };
 }
 
@@ -78,5 +82,6 @@ export function toRequest(form: DetectionFormState, model: ModelConfig): CreateD
     imageSize: form.imageSize,
     classes: [...new Set(form.classes)].sort((a, b) => a - b),
     processingMode: form.tracking ? "DETECTION_TRACKING" : "DETECTION_ONLY",
+    inferencePrecision: form.precision,
   };
 }

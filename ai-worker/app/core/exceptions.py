@@ -21,6 +21,11 @@ class ModelLoadingError(DetectionEngineError):
     """The requested model or device is unavailable."""
 
 
+class Int8ModelUnavailableError(ModelLoadingError):
+    """INT8 was requested explicitly, but no usable INT8 model exists on this worker (no artifact,
+    an invalid or stale one, no OpenVINO runtime, or a non-CPU device). Not retryable."""
+
+
 class InferenceError(DetectionEngineError):
     """Inference did not finish successfully."""
 
@@ -51,3 +56,7 @@ class VideoEncodingError(DetectionEngineError):
 
 class ArtifactStorageError(DetectionEngineError):
     """Completed artifacts could not be stored durably or read back."""
+
+
+class QuantizationError(DetectionEngineError):
+    """An INT8 model could not be exported, calibrated, or validated."""

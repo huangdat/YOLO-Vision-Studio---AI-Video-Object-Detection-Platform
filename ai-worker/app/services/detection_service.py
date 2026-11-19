@@ -48,7 +48,7 @@ class DetectionService:
             try:
                 results = loaded_model.model.predict(
                     source=image, conf=confidence, imgsz=image_size, classes=classes,
-                    device=loaded_model.device, save=False, verbose=False,
+                    device=loaded_model.predict_device, save=False, verbose=False,
                 )
                 result = results[0]
                 boxes = self._boxes(result, loaded_model.names)
@@ -76,7 +76,7 @@ class DetectionService:
             try:
                 stream = loaded_model.model.predict(
                     source=str(video_path), conf=inference_confidence, imgsz=image_size,
-                    classes=classes, device=loaded_model.device, stream=True,
+                    classes=classes, device=loaded_model.predict_device, stream=True,
                     save=False, verbose=False,
                 )
                 for result in stream:

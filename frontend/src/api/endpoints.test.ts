@@ -130,6 +130,34 @@ describe("detection API", () => {
     await expect(getDetection(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
   });
 
+  it("parses requested and effective precision, keeping legacy values neutral", async () => {
+    const { inferencePrecision: _job, ...legacyJob } = job();
+    const { effectivePrecision: _e, inferenceRuntime: _r, ...legacyResult } = result();
+    const { inferencePrecision: _row, ...legacyRow } = summary();
+    vi.spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: job({ inferencePrecision: "INT8" }) })
+      .mockResolvedValueOnce({ data: result({ effectivePrecision: "INT8", inferenceRuntime: "OPENVINO" }) })
+      .mockResolvedValueOnce({ data: legacyJob })
+      .mockResolvedValueOnce({ data: legacyResult })
+      .mockResolvedValueOnce({ data: page([legacyRow]) });
+
+    expect((await getDetection(JOB_ID)).inferencePrecision).toBe("INT8");
+    expect(await getDetectionResult(JOB_ID)).toMatchObject({ effectivePrecision: "INT8", inferenceRuntime: "OPENVINO" });
+    // Backends without precision support: null, never a guessed FP32 or runtime.
+    expect((await getDetection(JOB_ID)).inferencePrecision).toBeNull();
+    expect(await getDetectionResult(JOB_ID)).toMatchObject({ effectivePrecision: null, inferenceRuntime: null });
+    expect((await listDetections()).content[0].inferencePrecision).toBeNull();
+  });
+
+  it("rejects unknown precisions and runtimes", async () => {
+    vi.spyOn(apiClient, "get")
+      .mockResolvedValueOnce({ data: { ...job(), inferencePrecision: "FP16" } })
+      .mockResolvedValueOnce({ data: { ...result(), inferenceRuntime: "TENSORRT" } });
+
+    await expect(getDetection(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
+    await expect(getDetectionResult(JOB_ID)).rejects.toMatchObject({ kind: "invalid-response" });
+  });
+
   it("propagates request cancellation as a cancelled ApiError", async () => {
     vi.spyOn(apiClient, "get").mockRejectedValueOnce(new CanceledError());
     await expect(getDetection(JOB_ID, new AbortController().signal)).rejects.toMatchObject({
@@ -167,6 +195,7 @@ describe("detection submission API", () => {
     imageSize: 640,
     classes: [1, 2, 3, 5, 7],
     processingMode: "DETECTION_TRACKING" as const,
+    inferencePrecision: "FP32" as const,
   };
 
   it("posts exactly the request body and parses the 202 response", async () => {

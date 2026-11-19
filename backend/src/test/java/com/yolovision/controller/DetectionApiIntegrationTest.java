@@ -15,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.yolovision.entity.DetectionJob;
+import com.yolovision.entity.InferenceRuntime;
+import com.yolovision.entity.InferencePrecision;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.DetectionSourceType;
@@ -157,6 +159,80 @@ class DetectionApiIntegrationTest {
         assertThat(jobs.findById(jobId).orElseThrow().getProcessingMode()).isEqualTo(ProcessingMode.DETECTION_ONLY);
         assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow().getPayload()
                 .has("processingMode")).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INT8", "int8"})
+    void int8PrecisionIsPersistedReturnedAndSentToTheWorker(String value) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/detections").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"videoUrl\":\"" + VIDEO + "\",\"modelKey\":\"yolo11n\","
+                                + "\"inferencePrecision\":\"" + value + "\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.inferencePrecision").value("INT8"))
+                .andReturn().getResponse().getContentAsString();
+        UUID jobId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(body, "$.jobId"));
+
+        entityManager.flush();
+        assertThat(jobs.findById(jobId).orElseThrow().getInferencePrecision()).isEqualTo(InferencePrecision.INT8);
+        assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow().getPayload()
+                .path("inferencePrecision").asText()).isEqualTo("INT8");
+        mockMvc.perform(get("/api/v1/detections/" + jobId))
+                .andExpect(jsonPath("$.inferencePrecision").value("INT8"));
+        mockMvc.perform(get("/api/v1/detections"))
+                .andExpect(jsonPath("$.content[0].inferencePrecision").value("INT8"));
+    }
+
+    @Test
+    void requestsWithoutAPrecisionAreFp32AndSayFp32ToTheWorker() throws Exception {
+        String body = mockMvc.perform(post("/api/v1/detections").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"videoUrl\":\"" + VIDEO + "\",\"modelKey\":\"yolo11n\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.inferencePrecision").value("FP32"))
+                .andReturn().getResponse().getContentAsString();
+        UUID jobId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(body, "$.jobId"));
+
+        entityManager.flush();
+        assertThat(jobs.findById(jobId).orElseThrow().getInferencePrecision()).isEqualTo(InferencePrecision.FP32);
+        assertThat(outbox.findByJobIdAndMessageType(jobId, "detection.execute.v1").orElseThrow().getPayload()
+                .path("inferencePrecision").asText()).isEqualTo("FP32");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"\"INT4\"", "\"FP16\"", "\"\"", "8"})
+    void unsupportedPrecisionsAreFieldErrors(String precision) throws Exception {
+        mockMvc.perform(post("/api/v1/detections").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"videoUrl\":\"" + VIDEO + "\",\"modelKey\":\"yolo11n\",\"inferencePrecision\":"
+                                + precision + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_DETECTION_REQUEST"))
+                .andExpect(jsonPath("$.errors.inferencePrecision").value("must be FP32 or INT8"));
+        assertThat(outbox.count()).isZero();
+    }
+
+    @Test
+    void resultsReportTheEffectivePrecisionAndRuntimeAndLegacyResultsReportNull() throws Exception {
+        DetectionJob job = job(yolo11n, DetectionJobStatus.COMPLETED, 100);
+        job.setInferencePrecision(InferencePrecision.INT8);
+        jobs.saveAndFlush(job);
+        DetectionResult result = new DetectionResult(job, "detections/" + job.getId() + "/detected.mp4",
+                Map.of("car", 3L));
+        result.setEffectivePrecision(InferencePrecision.INT8);
+        result.setInferenceRuntime(InferenceRuntime.OPENVINO);
+        results.saveAndFlush(result);
+        DetectionJob legacy = job(yolo11n, DetectionJobStatus.COMPLETED, 100);
+        results.saveAndFlush(new DetectionResult(legacy, "detections/" + legacy.getId() + "/detected.mp4",
+                Map.of("car", 1L)));
+
+        mockMvc.perform(get("/api/v1/detections/" + job.getId() + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.effectivePrecision").value("INT8"))
+                .andExpect(jsonPath("$.inferenceRuntime").value("OPENVINO"));
+        String legacyBody = mockMvc.perform(get("/api/v1/detections/" + legacy.getId() + "/result"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(legacyBody).contains("\"effectivePrecision\":null", "\"inferenceRuntime\":null");
+        mockMvc.perform(get("/api/v1/detections/" + legacy.getId()))
+                .andExpect(jsonPath("$.inferencePrecision").value("FP32"));
     }
 
     @ParameterizedTest

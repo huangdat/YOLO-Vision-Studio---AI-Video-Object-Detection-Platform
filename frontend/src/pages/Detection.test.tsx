@@ -231,6 +231,7 @@ describe("Detection workspace", () => {
       imageSize: 960,
       classes: [0, 1, 2, 3, 5, 7],
       processingMode: "DETECTION_ONLY",
+      inferencePrecision: "FP32",
     });
     expect(await screen.findByText("Submitting the detection job…")).toBeTruthy();
     expect((submitButton() as HTMLButtonElement).disabled).toBe(true);
@@ -255,6 +256,32 @@ describe("Detection workspace", () => {
 
     await waitFor(() => expect(createDetection).toHaveBeenCalledTimes(1));
     expect(vi.mocked(createDetection).mock.calls[0][0].processingMode).toBe("DETECTION_TRACKING");
+  });
+
+  it("defaults to FP32, submits an explicit INT8 choice, and keeps it while editing", async () => {
+    vi.mocked(createDetection).mockResolvedValueOnce(accepted);
+    renderWorkspace();
+    await screen.findByLabelText("YOLO version");
+    const fp32 = screen.getByRole("radio", { name: /FP32 · Standard/ }) as HTMLInputElement;
+    const int8 = screen.getByRole("radio", { name: /INT8 · Optimized/ }) as HTMLInputElement;
+    expect(fp32.checked).toBe(true);
+    expect(int8.checked).toBe(false);
+    expect(screen.getByText("Experimental")).toBeTruthy();
+
+    fireEvent.click(int8);
+    expect(screen.getByText(/detections and Track IDs can differ slightly from FP32/)).toBeTruthy();
+    expect(screen.getByText(/not yet for vehicles/)).toBeTruthy();
+    // Editing other settings keeps the selected precision.
+    fireEvent.change(urlInput(), { target: { value: URL } });
+    fireEvent.click(screen.getByRole("switch", { name: /Object tracking/ }));
+    expect((screen.getByRole("radio", { name: /INT8 · Optimized/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(createDetection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(createDetection).mock.calls[0][0]).toMatchObject({
+      inferencePrecision: "INT8",
+      processingMode: "DETECTION_TRACKING",
+    });
   });
 
   it("does not call the API for an invalid form and focuses the first invalid field", async () => {

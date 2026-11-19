@@ -2,6 +2,7 @@ package com.yolovision.service;
 
 import com.yolovision.dto.messaging.DetectionEventMessage;
 import com.yolovision.entity.DetectionJob;
+import com.yolovision.entity.InferencePrecision;
 import com.yolovision.entity.DetectionJobStatus;
 import com.yolovision.entity.DetectionResult;
 import com.yolovision.entity.TrackingSummary;
@@ -154,6 +155,15 @@ public class DetectionJobLifecycleService {
             return Outcome.REJECTED;
         }
         DetectionEventMessage.Result payload = event.result();
+        InferencePrecision effective = payload.effectivePrecision();
+        if (effective != null && effective != job.getInferencePrecision()) {
+            // Never store a result under a precision it was not produced with (e.g. INT8 requested, FP32 ran).
+            LOG.error("Completion for job {} reported {} inference but the job requested {}",
+                    job.getId(), effective, job.getInferencePrecision());
+            applyFailure(job, "PRECISION_MISMATCH",
+                    "The worker reported a different inference precision than the job requested.");
+            return Outcome.REJECTED;
+        }
         if (!results.existsByJob_Id(job.getId())) {
             DetectionResult result = new DetectionResult(job, payload.outputVideoKey(),
                     Map.copyOf(payload.detectionSummary()));
@@ -161,6 +171,8 @@ public class DetectionJobLifecycleService {
             result.setTotalFrames(payload.totalFrames());
             result.setProcessingTimeMs(payload.processingTimeMs());
             result.setTrackingSummary(trackingSummary(job, payload));
+            result.setEffectivePrecision(effective);
+            result.setInferenceRuntime(payload.inferenceRuntime());
             results.save(result);
         }
         Instant now = Instant.now();

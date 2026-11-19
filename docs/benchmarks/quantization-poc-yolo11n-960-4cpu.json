@@ -1,0 +1,134 @@
+{
+  "input": {
+    "video": "holdout.mp4",
+    "frames": 592,
+    "imgsz": 960,
+    "conf": 0.25,
+    "classes": [
+      1,
+      2,
+      3,
+      5,
+      7
+    ],
+    "model": "yolo11n",
+    "warmupFramesExcluded": 5,
+    "repeats": 3,
+    "cpusPinned": 4
+  },
+  "host": {
+    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+    "system": "Windows-10-10.0.26200-SP0"
+  },
+  "results": {
+    "fp32": {
+      "inferenceMsMean": 83.03,
+      "inferenceMsP95": 107.07,
+      "endToEndFps": 10.49,
+      "endToEndFpsRange": [
+        8.78,
+        10.61
+      ],
+      "artifactBytes": 5613764,
+      "peakRssBytes": 504164352,
+      "torchThreads": 4,
+      "openvinoThreads": null,
+      "cpuAffinity": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "detections": {
+        "bus": 1873,
+        "car": 7972,
+        "truck": 405,
+        "motorcycle": 1
+      },
+      "detectionsTotal": 10251,
+      "tracking": {
+        "uniqueTrackIds": 106,
+        "meanTrackLengthFrames": 101.2,
+        "tracksAtLeast25Frames": 55
+      },
+      "deterministicAcrossRepeats": true
+    },
+    "int8": {
+      "inferenceMsMean": 36.29,
+      "inferenceMsP95": 49.78,
+      "endToEndFps": 20.67,
+      "endToEndFpsRange": [
+        20.28,
+        21.82
+      ],
+      "artifactBytes": 3408025,
+      "peakRssBytes": 593346560,
+      "torchThreads": 4,
+      "openvinoThreads": 4,
+      "cpuAffinity": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "detections": {
+        "car": 8334,
+        "bus": 1825,
+        "truck": 378
+      },
+      "detectionsTotal": 10537,
+      "tracking": {
+        "uniqueTrackIds": 104,
+        "meanTrackLengthFrames": 106.0,
+        "tracksAtLeast25Frames": 51
+      },
+      "deterministicAcrossRepeats": true,
+      "agreement": {
+        "boxRecallVsFp32": 0.9839,
+        "boxPrecisionVsFp32": 0.9572,
+        "fp32TracksCompared": 101,
+        "idSplitsVsFp32": 43,
+        "fp32TracksWithOneId": 70
+      }
+    },
+    "ov-fp32": {
+      "inferenceMsMean": 60.17,
+      "inferenceMsP95": 81.01,
+      "endToEndFps": 13.8,
+      "endToEndFpsRange": [
+        13.61,
+        14.77
+      ],
+      "artifactBytes": 10842757,
+      "peakRssBytes": 618291200,
+      "torchThreads": 4,
+      "openvinoThreads": 4,
+      "cpuAffinity": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "detections": {
+        "bus": 1873,
+        "car": 7972,
+        "truck": 405,
+        "motorcycle": 1
+      },
+      "detectionsTotal": 10251,
+      "tracking": {
+        "uniqueTrackIds": 106,
+        "meanTrackLengthFrames": 101.2,
+        "tracksAtLeast25Frames": 55
+      },
+      "deterministicAcrossRepeats": true,
+      "agreement": {
+        "boxRecallVsFp32": 1.0,
+        "boxPrecisionVsFp32": 1.0,
+        "fp32TracksCompared": 106,
+        "idSplitsVsFp32": 0,
+        "fp32TracksWithOneId": 106
+      }
+    }
+  }
+}

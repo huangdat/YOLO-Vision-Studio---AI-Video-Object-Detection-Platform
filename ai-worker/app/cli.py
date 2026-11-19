@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from app.config.logging import logging_config
 from app.config.settings import get_settings
 from app.core.exceptions import DetectionEngineError
-from app.schemas.detection import DetectionRequest, ProcessingMode, SourceType
+from app.schemas.detection import DetectionRequest, InferencePrecision, ProcessingMode, SourceType
 from app.schemas.progress import ProgressEvent
 
 
@@ -38,6 +38,8 @@ def parser() -> argparse.ArgumentParser:
     detect.add_argument("--output", type=Path, help="Optional MP4 path inside AI_OUTPUT_DIR; existing files are rejected")
     detect.add_argument("--tracking", action="store_true",
                         help="Also run ByteTrack so detections keep persistent Track IDs")
+    detect.add_argument("--precision", choices=("fp32", "int8"),
+                        help="Strict inference precision (default: AI_MODEL_PRECISION with its FP32 fallback)")
     prepare = commands.add_parser(
         "prepare-model", help="Alias of 'models prepare': download if needed, then load and verify"
     )
@@ -58,6 +60,29 @@ def parser() -> argparse.ArgumentParser:
     )
     explicit.add_argument("--model", required=True)
     explicit.add_argument("--device", choices=("auto", "cpu", "cuda:0"))
+
+    quantize = model_commands.add_parser(
+        "quantize", help="Export a prepared model to OpenVINO INT8 (post-training quantization, CPU)"
+    )
+    quantize.add_argument("--model", required=True)
+    quantize.add_argument("--imgsz", type=int, help="Calibration image size (default: AI_DEFAULT_IMAGE_SIZE)")
+    calibration = quantize.add_mutually_exclusive_group(required=True)
+    calibration.add_argument("--data", help="Ultralytics dataset YAML whose 'val' images are used for calibration")
+    calibration.add_argument("--calibration-video", type=Path,
+                             help="Local video; evenly spaced frames become an unlabeled calibration set")
+    calibration.add_argument("--calibration-images", type=Path, nargs="+", metavar="DIR",
+                             help="Image folders (e.g. several scenes); --calibration-frames are shared evenly")
+    quantize.add_argument("--calibration-frames", type=int, default=300,
+                          help="Maximum frames sampled from --calibration-video (default: 300)")
+    quantize.add_argument("--calibration-start", type=int, default=0, help="First frame index to sample")
+    quantize.add_argument("--calibration-end", type=int, help="Frame index to stop sampling before")
+    quantize.add_argument("--fraction", type=float, default=1.0,
+                          help="Fraction of the --data calibration images to use (default: 1.0)")
+    int8_status = model_commands.add_parser(
+        "int8-status", help="Show INT8 artifact status (never loads or exports anything)"
+    )
+    int8_status.add_argument("--model", help="Limit output to one approved model key")
+    int8_status.add_argument("--json", action="store_true", help="Print JSON instead of a table")
     return result
 
 
@@ -93,6 +118,20 @@ def _models_command(args: argparse.Namespace) -> int:
             specs = (spec,)
         rows = [status.as_dict() for status in inspect_models(settings.model_cache_dir, specs)]
         columns = ["modelKey", "version", "modelSize", "status", "sizeBytes", "verifiedDevice", "verifiedAt"]
+    elif args.models_command == "int8-status":
+        from app.services.model_quantization import inspect_int8_artifact
+
+        specs = MODEL_SPECS
+        if args.model is not None:
+            spec = get_model_spec(args.model)
+            if spec is None:
+                print("Unsupported model identifier. Run 'models list' for approved keys.", file=sys.stderr)
+                return 2
+            specs = (spec,)
+        rows = [inspect_int8_artifact(settings, spec).as_dict() for spec in specs]
+        columns = ["modelKey", "format", "status", "sizeBytes", "exportImageSize", "calibrationImages", "createdAt"]
+    elif args.models_command == "quantize":
+        return _quantize_model(args)
     else:
         return _prepare_model(args.model, args.device)
     print(json.dumps(rows, indent=2) if args.json else _model_rows(rows, columns))
@@ -122,6 +161,66 @@ def _prepare_model(model_key: str, device: str | None) -> int:
     return 0
 
 
+def _quantize_model(args: argparse.Namespace) -> int:
+    """Explicit INT8 export. Never downloads weights: the FP32 model must already be prepared."""
+    import shutil
+    import uuid
+
+    from app.services.model_loader import ModelLoader
+    from app.services.model_quantization import (
+        build_calibration_dataset, build_calibration_dataset_from_images, export_int8,
+    )
+    from app.services.model_registry import get_model_spec
+
+    settings = get_settings()
+    spec = get_model_spec(args.model)
+    if spec is None:
+        print("Unsupported model identifier. Run 'models list' for approved keys.", file=sys.stderr)
+        return 2
+    image_size = args.imgsz or settings.default_image_size
+    workspace: Path | None = None
+    try:
+        calibration = None
+        validation_image = None
+        data: str | Path = args.data or ""
+        if args.calibration_images is not None:
+            names = ModelLoader(settings).load(spec.model_key, "cpu", allow_download=False,
+                                               record_verification=False, precision="fp32").names
+            workspace = settings.temp_dir.expanduser().resolve() / f"calibration-{uuid.uuid4().hex[:8]}"
+            image_set = build_calibration_dataset_from_images(
+                args.calibration_images, workspace, names, max_images=args.calibration_frames)
+            data, calibration = image_set.data_yaml, image_set.describe()
+            validation_image = next((workspace / "images" / "val").glob("*"), None)
+            print(f"Calibration set: {image_set.images} images from "
+                  + ", ".join(f"{item['name']} ({item['used']})" for item in image_set.sources), file=sys.stderr)
+        elif args.calibration_video is not None:
+            if not args.calibration_video.is_file():
+                print("The calibration video does not exist.", file=sys.stderr)
+                return 2
+            names = ModelLoader(settings).load(spec.model_key, "cpu", allow_download=False,
+                                               record_verification=False, precision="fp32").names
+            workspace = settings.temp_dir.expanduser().resolve() / f"calibration-{uuid.uuid4().hex[:8]}"
+            dataset = build_calibration_dataset(
+                args.calibration_video, workspace, names, max_images=args.calibration_frames,
+                start_frame=args.calibration_start, end_frame=args.calibration_end,
+            )
+            data, calibration = dataset.data_yaml, dataset.describe()
+            validation_image = next((workspace / "images" / "val").glob("*.jpg"), None)
+            print(f"Calibration set: {dataset.images} frames from {dataset.source} "
+                  f"(frames {dataset.frame_range[0]}-{dataset.frame_range[1]}, every {dataset.stride})",
+                  file=sys.stderr)
+        result = export_int8(settings, spec.model_key, data=data, image_size=image_size, fraction=args.fraction,
+                             calibration=calibration, validation_image=validation_image)
+    finally:
+        if workspace is not None:
+            shutil.rmtree(workspace, ignore_errors=True)
+    ratio = result.int8_size_bytes / result.fp32_size_bytes if result.fp32_size_bytes else 0
+    print(f"Exported {spec.model_key} to OpenVINO INT8: {result.status.status.value}, "
+          f"{result.int8_size_bytes} bytes ({ratio:.0%} of the {result.fp32_size_bytes}-byte FP32 checkpoint), "
+          f"{result.fake_quantize_nodes} quantized operations; directory: {result.status.directory}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
@@ -141,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             output_path=args.output,
             processing_mode=ProcessingMode.DETECTION_TRACKING if args.tracking else ProcessingMode.DETECTION_ONLY,
+            inference_precision=InferencePrecision(args.precision.upper()) if args.precision else None,
         )
         from app.workers.detection_pipeline import DetectionPipeline
 
@@ -158,7 +258,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Invalid detection configuration or arguments. Check CLI help and AI_* settings.", file=sys.stderr)
         return 2
     except DetectionEngineError as error:
-        operation = "Detection" if args.command == "detect" else "Model preparation"
+        operation = ("Detection" if args.command == "detect"
+                     else "Quantization" if getattr(args, "models_command", None) == "quantize"
+                     else "Model preparation")
         print(f"{operation} failed: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

@@ -1,0 +1,313 @@
+{
+  "input": {
+    "sequences": [
+      {
+        "name": "STREET-01",
+        "frames": 60,
+        "size": [
+          640,
+          480
+        ]
+      }
+    ],
+    "model": "yolo11n",
+    "imgsz": 640,
+    "conf": 0.25,
+    "detectClasses": [
+      0
+    ],
+    "classMap": {
+      "0": 1
+    },
+    "evalClasses": [
+      1
+    ],
+    "distractorClasses": [
+      2,
+      7,
+      8,
+      12
+    ],
+    "repeats": 1,
+    "cpusPinned": 4,
+    "warmupFramesExcluded": 5
+  },
+  "host": {
+    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+    "system": "Windows-10-10.0.26200-SP0",
+    "ultralytics": "8.4.207",
+    "torch": "2.13.0+cpu",
+    "openvino": "2026.4.1"
+  },
+  "accuracy": {
+    "fp32": {
+      "STREET-01": {
+        "HOTA": 1.0,
+        "DetA": 1.0,
+        "AssA": 1.0,
+        "MOTA": 1.0,
+        "MOTP": 0.9998709393517955,
+        "IDF1": 1.0,
+        "IDSW": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "TP": 242,
+        "FN": 0,
+        "FP": 0,
+        "fragmentations": 1,
+        "mostlyTracked": 6,
+        "mostlyLost": 0,
+        "gtIds": 6,
+        "trackerIds": 6
+      }
+    },
+    "int8": {
+      "STREET-01": {
+        "HOTA": 0.9565035159969357,
+        "DetA": 0.9377947120875157,
+        "AssA": 0.9756122269088294,
+        "MOTA": 0.9421487603305785,
+        "MOTP": 0.9819182095745698,
+        "IDF1": 0.97165991902834,
+        "IDSW": 0,
+        "precision": 0.9523809523809523,
+        "recall": 0.9917355371900827,
+        "TP": 240,
+        "FN": 2,
+        "FP": 12,
+        "fragmentations": 1,
+        "mostlyTracked": 5,
+        "mostlyLost": 1,
+        "gtIds": 6,
+        "trackerIds": 6
+      }
+    },
+    "ov-fp32": {
+      "STREET-01": {
+        "HOTA": 1.0,
+        "DetA": 1.0,
+        "AssA": 1.0,
+        "MOTA": 1.0,
+        "MOTP": 0.9998709987464394,
+        "IDF1": 1.0,
+        "IDSW": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "TP": 242,
+        "FN": 0,
+        "FP": 0,
+        "fragmentations": 1,
+        "mostlyTracked": 6,
+        "mostlyLost": 0,
+        "gtIds": 6,
+        "trackerIds": 6
+      }
+    }
+  },
+  "accuracyDeltaVsPytorchFp32": {
+    "int8": {
+      "HOTA": -0.0435,
+      "DetA": -0.0622,
+      "AssA": -0.0244,
+      "MOTA": -0.0579,
+      "IDF1": -0.0283,
+      "IDSW": 0,
+      "precision": -0.0476,
+      "recall": -0.0083
+    },
+    "ov-fp32": {
+      "HOTA": 0.0,
+      "DetA": 0.0,
+      "AssA": 0.0,
+      "MOTA": 0.0,
+      "IDF1": 0.0,
+      "IDSW": 0,
+      "precision": 0.0,
+      "recall": 0.0
+    }
+  },
+  "performance": {
+    "STREET-01": {
+      "results": {
+        "fp32": {
+          "inferenceMsMean": 68.52,
+          "inferenceMsP95": 136.46,
+          "endToEndFps": 12.43,
+          "endToEndFpsRange": [
+            12.43,
+            12.43
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 68.52,
+              "min": 68.52,
+              "max": 68.52,
+              "stdev": 0.0
+            },
+            "inferenceMsP95": {
+              "median": 136.46,
+              "min": 136.46,
+              "max": 136.46,
+              "stdev": 0.0
+            },
+            "endToEndFps": {
+              "median": 12.43,
+              "min": 12.43,
+              "max": 12.43,
+              "stdev": 0.0
+            }
+          },
+          "artifactBytes": 5613764,
+          "peakRssBytes": 418037760,
+          "loadSeconds": 1.81,
+          "torchThreads": 4,
+          "openvinoThreads": null,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 240
+          },
+          "detectionsTotal": 240,
+          "tracking": {
+            "uniqueTrackIds": 6,
+            "meanTrackLengthFrames": 40.3,
+            "tracksAtLeast25Frames": 4
+          },
+          "deterministicAcrossRepeats": true
+        },
+        "int8": {
+          "inferenceMsMean": 54.97,
+          "inferenceMsP95": 98.15,
+          "endToEndFps": 15.69,
+          "endToEndFpsRange": [
+            15.69,
+            15.69
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 54.97,
+              "min": 54.97,
+              "max": 54.97,
+              "stdev": 0.0
+            },
+            "inferenceMsP95": {
+              "median": 98.15,
+              "min": 98.15,
+              "max": 98.15,
+              "stdev": 0.0
+            },
+            "endToEndFps": {
+              "median": 15.69,
+              "min": 15.69,
+              "max": 15.69,
+              "stdev": 0.0
+            }
+          },
+          "artifactBytes": 3408025,
+          "peakRssBytes": 513122304,
+          "loadSeconds": 10.12,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 237
+          },
+          "detectionsTotal": 237,
+          "tracking": {
+            "uniqueTrackIds": 6,
+            "meanTrackLengthFrames": 42,
+            "tracksAtLeast25Frames": 4
+          },
+          "deterministicAcrossRepeats": true,
+          "agreement": {
+            "boxRecallVsFp32": 0.9708,
+            "boxPrecisionVsFp32": 0.9831,
+            "fp32TracksCompared": 5,
+            "idSplitsVsFp32": 1,
+            "fp32TracksWithOneId": 4
+          }
+        },
+        "ov-fp32": {
+          "inferenceMsMean": 50.3,
+          "inferenceMsP95": 66.22,
+          "endToEndFps": 17.84,
+          "endToEndFpsRange": [
+            17.84,
+            17.84
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 50.3,
+              "min": 50.3,
+              "max": 50.3,
+              "stdev": 0.0
+            },
+            "inferenceMsP95": {
+              "median": 66.22,
+              "min": 66.22,
+              "max": 66.22,
+              "stdev": 0.0
+            },
+            "endToEndFps": {
+              "median": 17.84,
+              "min": 17.84,
+              "max": 17.84,
+              "stdev": 0.0
+            }
+          },
+          "artifactBytes": 10842757,
+          "peakRssBytes": 516100096,
+          "loadSeconds": 11.67,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 240
+          },
+          "detectionsTotal": 240,
+          "tracking": {
+            "uniqueTrackIds": 6,
+            "meanTrackLengthFrames": 40.3,
+            "tracksAtLeast25Frames": 4
+          },
+          "deterministicAcrossRepeats": true,
+          "agreement": {
+            "boxRecallVsFp32": 1.0,
+            "boxPrecisionVsFp32": 1.0,
+            "fp32TracksCompared": 6,
+            "idSplitsVsFp32": 0,
+            "fp32TracksWithOneId": 6
+          }
+        }
+      },
+      "gains": {
+        "runtime(fp32->ov-fp32)": {
+          "inference": 1.36,
+          "endToEnd": 1.44
+        },
+        "quantization(ov-fp32->int8)": {
+          "inference": 0.92,
+          "endToEnd": 0.88
+        },
+        "total(fp32->int8)": {
+          "inference": 1.25,
+          "endToEnd": 1.26
+        }
+      }
+    }
+  }
+}

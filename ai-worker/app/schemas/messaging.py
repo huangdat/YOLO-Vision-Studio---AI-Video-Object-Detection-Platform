@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from pydantic import Field, field_validator, model_validator
 
 from app.schemas.base import EngineSchema
-from app.schemas.detection import ProcessingMode, SourceType
+from app.schemas.detection import InferencePrecision, InferenceRuntime, ProcessingMode, SourceType
 
 SCHEMA_VERSION = 1
 COMMAND_MESSAGE_TYPE = "detection.execute.v1"
@@ -39,6 +39,9 @@ class DetectionCommand(EngineSchema):
     # Optional and additive: commands without it (all commands before tracking existed, and
     # detection-only commands, which omit it) are processed exactly as before.
     processing_mode: ProcessingMode = ProcessingMode.DETECTION_ONLY
+    # Per-job precision (Phase 3). Commands without it (queued before Phase 3) keep the worker's
+    # configured default and fallback; an explicit value is strict.
+    inference_precision: InferencePrecision | None = None
 
     @field_validator("classes")
     @classmethod
@@ -83,6 +86,8 @@ class EventResult(EngineSchema):
     detection_summary: dict[Annotated[str, Field(min_length=1, max_length=128)], Annotated[int, Field(ge=0)]]
     processing_mode: ProcessingMode | None = None
     tracking: EventTracking | None = None
+    effective_precision: InferencePrecision | None = None
+    inference_runtime: InferenceRuntime | None = None
 
 
 class EventError(EngineSchema):

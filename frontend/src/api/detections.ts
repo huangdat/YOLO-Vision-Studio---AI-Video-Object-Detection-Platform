@@ -21,6 +21,8 @@ import type {
   DetectionProgressEvent,
   DetectionResultMetadata,
   DetectionSourceType,
+  InferencePrecision,
+  InferenceRuntime,
   ProcessingMode,
   TrackingSummary,
 } from "../types/detections";
@@ -38,6 +40,21 @@ function processingMode(data: JsonRecord): ProcessingMode {
   const value = data.processingMode;
   if (value === undefined || value === null) return "DETECTION_ONLY";
   if (value !== "DETECTION_ONLY" && value !== "DETECTION_TRACKING") invalid();
+  return value;
+}
+
+/** Absent in responses from backends without precision support: shown neutrally, never guessed. */
+function precision(data: JsonRecord, key: string): InferencePrecision | null {
+  const value = data[key];
+  if (value === undefined || value === null) return null;
+  if (value !== "FP32" && value !== "INT8") invalid();
+  return value;
+}
+
+function runtime(data: JsonRecord): InferenceRuntime | null {
+  const value = data.inferenceRuntime;
+  if (value === undefined || value === null) return null;
+  if (value !== "PYTORCH" && value !== "OPENVINO") invalid();
   return value;
 }
 
@@ -70,6 +87,7 @@ function toSummary(value: unknown): DetectionJobSummary {
     completedAt: nullableString(data, "completedAt"),
     errorCode: nullableString(data, "errorCode"),
     processingMode: processingMode(data),
+    inferencePrecision: precision(data, "inferencePrecision"),
   };
 }
 
@@ -98,6 +116,7 @@ export function toDetectionJob(value: unknown): DetectionJob {
     errorCode: nullableString(data, "errorCode"),
     errorMessage: nullableString(data, "errorMessage"),
     processingMode: processingMode(data),
+    inferencePrecision: precision(data, "inferencePrecision"),
   };
 }
 
@@ -124,6 +143,8 @@ function toResult(value: unknown): DetectionResultMetadata {
     completedAt: nullableString(data, "completedAt"),
     processingMode: processingMode(data),
     tracking: toTracking(data.tracking),
+    effectivePrecision: precision(data, "effectivePrecision"),
+    inferenceRuntime: runtime(data),
   };
 }
 

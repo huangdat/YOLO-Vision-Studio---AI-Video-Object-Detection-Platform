@@ -11,6 +11,7 @@ import { ResultJsonViewer } from "../components/results/ResultJsonViewer";
 import { ProgressBar } from "../components/ProgressBar";
 import { Alert, Disclosure, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { processingModeLabel } from "../components/workspace/TrackingToggle";
+import { executedPrecisionText, precisionErrorHint, requestedPrecisionText } from "../lib/precision";
 import { useApiResource, type Resource } from "../hooks/useApiResource";
 import {
   isNewerSnapshot,
@@ -175,13 +176,16 @@ export function DetectionDetails() {
             <p className="error-code-line">
               Error code <code>{loaded.errorCode ?? current.errorCode ?? "FAILED"}</code>
             </p>
+            {precisionErrorHint(loaded.errorCode ?? current.errorCode) && (
+              <p>{precisionErrorHint(loaded.errorCode ?? current.errorCode)}</p>
+            )}
           </Alert>
         )}
       </section>
 
       {completed && <ResultPanel jobId={loaded.jobId} result={result} />}
 
-      <JobSettings job={loaded} />
+      <JobSettings job={loaded} result={completed && result.status === "success" ? result.data : null} />
 
       <section className="card page-section" aria-label="Technical details">
         <Disclosure label="Technical details" summary="Job ID, class IDs, and update time">
@@ -238,7 +242,8 @@ function DetailsShell({ title, children }: { title: string; children: ReactNode 
   );
 }
 
-function JobSettings({ job }: { job: DetectionJob }) {
+function JobSettings({ job, result }: { job: DetectionJob; result: DetectionResultMetadata | null }) {
+  const executed = result ? executedPrecisionText(result.effectivePrecision, result.inferenceRuntime) : null;
   return (
     <section className="card" aria-labelledby="config-title">
       <h2 id="config-title" className="card-title">
@@ -262,6 +267,16 @@ function JobSettings({ job }: { job: DetectionJob }) {
         <div>
           <dt>Processing mode</dt>
           <dd>{processingModeLabel(job.processingMode)}</dd>
+        </div>
+        <div>
+          <dt>Inference precision</dt>
+          <dd className="precision-detail">
+            <span>Requested: {requestedPrecisionText(job.inferencePrecision)}</span>
+            <span>
+              Executed:{" "}
+              {executed ?? (result ? "Not reported by the worker" : job.status === "COMPLETED" ? "Loading…" : "Pending")}
+            </span>
+          </dd>
         </div>
         <div>
           <dt>Objects</dt>

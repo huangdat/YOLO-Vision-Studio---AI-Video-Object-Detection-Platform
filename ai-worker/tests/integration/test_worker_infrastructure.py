@@ -58,7 +58,9 @@ class SlowFakePipeline:
         video = out / "detected.mp4"
         video.write_bytes(b"\x00\x00\x00\x18ftypisom" + b"\x00" * 2048)
         return SimpleNamespace(
-            model_key=request.model_key, output=SimpleNamespace(video_path=video),
+            # Like a real DetectionResult (since ByteTrack): the processor checks the echoed mode.
+            model_key=request.model_key, processing_mode=request.processing_mode, tracking=None,
+            output=SimpleNamespace(video_path=video),
             statistics=SimpleNamespace(total_frames_processed=36),
             model_dump_json=lambda by_alias: json.dumps({
                 "modelKey": request.model_key, "processingTimeMs": 1234,

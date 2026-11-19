@@ -1,0 +1,488 @@
+{
+  "input": {
+    "sequences": [
+      {
+        "name": "MOT17-02-FRCNN",
+        "frames": 600,
+        "size": [
+          1920,
+          1080
+        ]
+      },
+      {
+        "name": "MOT17-05-FRCNN",
+        "frames": 837,
+        "size": [
+          640,
+          480
+        ]
+      },
+      {
+        "name": "MOT17-09-FRCNN",
+        "frames": 525,
+        "size": [
+          1920,
+          1080
+        ]
+      },
+      {
+        "name": "MOT17-10-FRCNN",
+        "frames": 654,
+        "size": [
+          1920,
+          1080
+        ]
+      },
+      {
+        "name": "MOT17-11-FRCNN",
+        "frames": 900,
+        "size": [
+          1920,
+          1080
+        ]
+      }
+    ],
+    "model": "yolo11n",
+    "imgsz": 960,
+    "conf": 0.25,
+    "detectClasses": [
+      0
+    ],
+    "classMap": {
+      "0": 1
+    },
+    "evalClasses": [
+      1
+    ],
+    "distractorClasses": [
+      2,
+      7,
+      8,
+      12
+    ],
+    "repeats": 2,
+    "cpusPinned": 4,
+    "warmupFramesExcluded": 5
+  },
+  "host": {
+    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+    "system": "Windows-10-10.0.26200-SP0",
+    "ultralytics": "8.4.207",
+    "torch": "2.13.0+cpu",
+    "openvino": "2026.4.1"
+  },
+  "accuracy": {
+    "int8-diverse": {
+      "MOT17-02-FRCNN": {
+        "HOTA": 0.31369173654474747,
+        "DetA": 0.2757031536501254,
+        "AssA": 0.3644663987065251,
+        "MOTA": 0.27797212206016897,
+        "MOTP": 0.7948340184606082,
+        "IDF1": 0.3648953785940087,
+        "IDSW": 80,
+        "precision": 0.8281817044174696,
+        "recall": 0.35617028147031915,
+        "TP": 6618,
+        "FN": 11963,
+        "FP": 1373,
+        "fragmentations": 161,
+        "mostlyTracked": 10,
+        "mostlyLost": 33,
+        "gtIds": 62,
+        "trackerIds": 153
+      },
+      "MOT17-05-FRCNN": {
+        "HOTA": 0.40230016822063885,
+        "DetA": 0.40755700194080857,
+        "AssA": 0.4020656522145522,
+        "MOTA": 0.3883186352464941,
+        "MOTP": 0.7404690822040386,
+        "IDF1": 0.5309820417408186,
+        "IDSW": 131,
+        "precision": 0.7586776859504132,
+        "recall": 0.5972242301575827,
+        "TP": 4131,
+        "FN": 2786,
+        "FP": 1314,
+        "fragmentations": 196,
+        "mostlyTracked": 28,
+        "mostlyLost": 27,
+        "gtIds": 133,
+        "trackerIds": 225
+      },
+      "MOT17-09-FRCNN": {
+        "HOTA": 0.4448143820285574,
+        "DetA": 0.5204875643866829,
+        "AssA": 0.382268291332413,
+        "MOTA": 0.5827230046948357,
+        "MOTP": 0.8080969322709839,
+        "IDF1": 0.5191150983790397,
+        "IDSW": 71,
+        "precision": 0.8539250669045495,
+        "recall": 0.7190610328638498,
+        "TP": 3829,
+        "FN": 1496,
+        "FP": 655,
+        "fragmentations": 70,
+        "mostlyTracked": 12,
+        "mostlyLost": 3,
+        "gtIds": 26,
+        "trackerIds": 83
+      },
+      "MOT17-10-FRCNN": {
+        "HOTA": 0.34305279969963853,
+        "DetA": 0.38059486548698046,
+        "AssA": 0.3132559588982626,
+        "MOTA": 0.4152971415219254,
+        "MOTP": 0.7598421725825801,
+        "IDF1": 0.4130157796726453,
+        "IDSW": 195,
+        "precision": 0.8652041760274878,
+        "recall": 0.5099306799594984,
+        "TP": 6547,
+        "FN": 6292,
+        "FP": 1020,
+        "fragmentations": 310,
+        "mostlyTracked": 13,
+        "mostlyLost": 19,
+        "gtIds": 57,
+        "trackerIds": 209
+      },
+      "MOT17-11-FRCNN": {
+        "HOTA": 0.512768943705575,
+        "DetA": 0.5161334743635816,
+        "AssA": 0.5137136824635935,
+        "MOTA": 0.5205595591352268,
+        "MOTP": 0.840820881807066,
+        "IDF1": 0.5665845006913967,
+        "IDSW": 39,
+        "precision": 0.8439627622620536,
+        "recall": 0.6437049597286986,
+        "TP": 6074,
+        "FN": 3362,
+        "FP": 1123,
+        "fragmentations": 60,
+        "mostlyTracked": 23,
+        "mostlyLost": 31,
+        "gtIds": 75,
+        "trackerIds": 143
+      },
+      "COMBINED": {
+        "HOTA": 0.3903901054546206,
+        "DetA": 0.3864434670620936,
+        "AssA": 0.40128412876453734,
+        "MOTA": 0.3992240762363931,
+        "MOTP": 0.7902910109348525,
+        "IDF1": 0.4570189550255298,
+        "IDSW": 516,
+        "precision": 0.8321808836127769,
+        "recall": 0.5122415156879732,
+        "TP": 27199,
+        "FN": 25899,
+        "FP": 5485,
+        "fragmentations": 797,
+        "mostlyTracked": 86,
+        "mostlyLost": 113
+      }
+    }
+  },
+  "accuracyDeltaVsPytorchFp32": {},
+  "performance": {
+    "MOT17-02-FRCNN": {
+      "results": {
+        "int8-diverse": {
+          "inferenceMsMean": 39.32,
+          "inferenceMsP95": 51.1,
+          "endToEndFps": 19.27,
+          "endToEndFpsRange": [
+            18.8,
+            19.75
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 39.32,
+              "min": 38.42,
+              "max": 40.21,
+              "stdev": 1.26
+            },
+            "inferenceMsP95": {
+              "median": 51.1,
+              "min": 48.76,
+              "max": 53.44,
+              "stdev": 3.31
+            },
+            "endToEndFps": {
+              "median": 19.27,
+              "min": 18.8,
+              "max": 19.75,
+              "stdev": 0.67
+            }
+          },
+          "artifactBytes": 3408802,
+          "peakRssBytes": 558747648,
+          "loadSeconds": 7.14,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 8516
+          },
+          "detectionsTotal": 8516,
+          "tracking": {
+            "uniqueTrackIds": 164,
+            "meanTrackLengthFrames": 52.8,
+            "tracksAtLeast25Frames": 82
+          },
+          "deterministicAcrossRepeats": true
+        }
+      },
+      "gains": {
+        "runtime(fp32->ov-fp32)": null,
+        "quantization(ov-fp32->int8)": null,
+        "total(fp32->int8)": null
+      }
+    },
+    "MOT17-05-FRCNN": {
+      "results": {
+        "int8-diverse": {
+          "inferenceMsMean": 50.87,
+          "inferenceMsP95": 77.5,
+          "endToEndFps": 16.34,
+          "endToEndFpsRange": [
+            15.64,
+            17.05
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 50.87,
+              "min": 48.56,
+              "max": 53.18,
+              "stdev": 3.27
+            },
+            "inferenceMsP95": {
+              "median": 77.5,
+              "min": 75.53,
+              "max": 79.47,
+              "stdev": 2.79
+            },
+            "endToEndFps": {
+              "median": 16.34,
+              "min": 15.64,
+              "max": 17.05,
+              "stdev": 1.0
+            }
+          },
+          "artifactBytes": 3408802,
+          "peakRssBytes": 565125120,
+          "loadSeconds": 7.13,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 6377
+          },
+          "detectionsTotal": 6377,
+          "tracking": {
+            "uniqueTrackIds": 226,
+            "meanTrackLengthFrames": 24.1,
+            "tracksAtLeast25Frames": 56
+          },
+          "deterministicAcrossRepeats": true
+        }
+      },
+      "gains": {
+        "runtime(fp32->ov-fp32)": null,
+        "quantization(ov-fp32->int8)": null,
+        "total(fp32->int8)": null
+      }
+    },
+    "MOT17-09-FRCNN": {
+      "results": {
+        "int8-diverse": {
+          "inferenceMsMean": 47.12,
+          "inferenceMsP95": 69.58,
+          "endToEndFps": 16.91,
+          "endToEndFpsRange": [
+            15.54,
+            18.28
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 47.12,
+              "min": 43.24,
+              "max": 51.0,
+              "stdev": 5.48
+            },
+            "inferenceMsP95": {
+              "median": 69.58,
+              "min": 56.27,
+              "max": 82.89,
+              "stdev": 18.82
+            },
+            "endToEndFps": {
+              "median": 16.91,
+              "min": 15.54,
+              "max": 18.28,
+              "stdev": 1.94
+            }
+          },
+          "artifactBytes": 3408802,
+          "peakRssBytes": 557367296,
+          "loadSeconds": 7.11,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 5428
+          },
+          "detectionsTotal": 5428,
+          "tracking": {
+            "uniqueTrackIds": 94,
+            "meanTrackLengthFrames": 56.1,
+            "tracksAtLeast25Frames": 49
+          },
+          "deterministicAcrossRepeats": true
+        }
+      },
+      "gains": {
+        "runtime(fp32->ov-fp32)": null,
+        "quantization(ov-fp32->int8)": null,
+        "total(fp32->int8)": null
+      }
+    },
+    "MOT17-10-FRCNN": {
+      "results": {
+        "int8-diverse": {
+          "inferenceMsMean": 42.33,
+          "inferenceMsP95": 59.38,
+          "endToEndFps": 18.5,
+          "endToEndFpsRange": [
+            15.66,
+            21.34
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 42.33,
+              "min": 35.45,
+              "max": 49.21,
+              "stdev": 9.73
+            },
+            "inferenceMsP95": {
+              "median": 59.38,
+              "min": 47.66,
+              "max": 71.09,
+              "stdev": 16.57
+            },
+            "endToEndFps": {
+              "median": 18.5,
+              "min": 15.66,
+              "max": 21.34,
+              "stdev": 4.02
+            }
+          },
+          "artifactBytes": 3408802,
+          "peakRssBytes": 562003968,
+          "loadSeconds": 7.36,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 9358
+          },
+          "detectionsTotal": 9358,
+          "tracking": {
+            "uniqueTrackIds": 220,
+            "meanTrackLengthFrames": 37.0,
+            "tracksAtLeast25Frames": 73
+          },
+          "deterministicAcrossRepeats": true
+        }
+      },
+      "gains": {
+        "runtime(fp32->ov-fp32)": null,
+        "quantization(ov-fp32->int8)": null,
+        "total(fp32->int8)": null
+      }
+    },
+    "MOT17-11-FRCNN": {
+      "results": {
+        "int8-diverse": {
+          "inferenceMsMean": 37.14,
+          "inferenceMsP95": 48.42,
+          "endToEndFps": 21.29,
+          "endToEndFpsRange": [
+            21.26,
+            21.32
+          ],
+          "variance": {
+            "inferenceMsMean": {
+              "median": 37.14,
+              "min": 37.11,
+              "max": 37.17,
+              "stdev": 0.04
+            },
+            "inferenceMsP95": {
+              "median": 48.42,
+              "min": 47.7,
+              "max": 49.13,
+              "stdev": 1.01
+            },
+            "endToEndFps": {
+              "median": 21.29,
+              "min": 21.26,
+              "max": 21.32,
+              "stdev": 0.04
+            }
+          },
+          "artifactBytes": 3408802,
+          "peakRssBytes": 565633024,
+          "loadSeconds": 6.58,
+          "torchThreads": 4,
+          "openvinoThreads": 4,
+          "cpuAffinity": [
+            0,
+            2,
+            4,
+            6
+          ],
+          "detections": {
+            "person": 7943
+          },
+          "detectionsTotal": 7943,
+          "tracking": {
+            "uniqueTrackIds": 147,
+            "meanTrackLengthFrames": 49.4,
+            "tracksAtLeast25Frames": 54
+          },
+          "deterministicAcrossRepeats": true
+        }
+      },
+      "gains": {
+        "runtime(fp32->ov-fp32)": null,
+        "quantization(ov-fp32->int8)": null,
+        "total(fp32->int8)": null
+      }
+    }
+  }
+}

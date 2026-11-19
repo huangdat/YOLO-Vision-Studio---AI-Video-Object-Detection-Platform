@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Alert, Disclosure, EmptyState, ErrorState, LoadingSkeleton } from "../components/StateViews";
 import { ClassSelector } from "../components/workspace/ClassSelector";
 import { ConfidenceControl, ImageSizeSelector } from "../components/workspace/DetectionSettings";
+import { PrecisionSelector } from "../components/workspace/PrecisionSelector";
 import { TrackingToggle } from "../components/workspace/TrackingToggle";
 import { ModelSelector } from "../components/workspace/ModelSelector";
 import { VideoSourceField } from "../components/workspace/VideoSourceField";
@@ -335,6 +336,11 @@ export function Detection() {
             checked={form.tracking}
             disabled={submitting}
             onChange={(value) => update("tracking", value)}
+          />
+          <PrecisionSelector
+            value={form.precision}
+            disabled={submitting}
+            onChange={(value) => update("precision", value)}
           />
         </section>
 

@@ -27,12 +27,22 @@ public record CreateDetectionRequest(
         List<Integer> classes,
         @Schema(description = "DETECTION_ONLY (default) or DETECTION_TRACKING (adds ByteTrack Track IDs)",
                 example = "DETECTION_TRACKING", allowableValues = {"DETECTION_ONLY", "DETECTION_TRACKING"})
-        String processingMode) {
+        String processingMode,
+        @Schema(description = "FP32 (default, PyTorch) or INT8 (experimental OpenVINO INT8, CPU only; needs an "
+                + "exported INT8 model on the worker, otherwise the job fails with INT8_MODEL_UNAVAILABLE). "
+                + "Case-insensitive.", example = "FP32", allowableValues = {"FP32", "INT8"})
+        String inferencePrecision) {
 
     /** Requests written before tracking existed (no processingMode) mean Detection Only. */
     public CreateDetectionRequest(String videoUrl, String modelKey, BigDecimal confidence, Integer imageSize,
             List<Integer> classes) {
-        this(videoUrl, modelKey, confidence, imageSize, classes, null);
+        this(videoUrl, modelKey, confidence, imageSize, classes, null, null);
+    }
+
+    /** Requests written before precision existed (no inferencePrecision) mean FP32. */
+    public CreateDetectionRequest(String videoUrl, String modelKey, BigDecimal confidence, Integer imageSize,
+            List<Integer> classes, String processingMode) {
+        this(videoUrl, modelKey, confidence, imageSize, classes, processingMode, null);
     }
 
     /**

@@ -258,7 +258,8 @@ class LiveInferenceService:
             evicted_keys = ModelLoader.evict(set(self._models))
         if evicted_keys:
             logger.info("Released cached models: %s", ", ".join(evicted_keys))
-        logger.info("Live model %s ready on %s", model_key, loaded.device)
+        logger.info("Live model %s ready on %s (%s, %s)", model_key, loaded.device,
+                    str(getattr(loaded, "precision", "fp32")).upper(), getattr(loaded, "runtime", "PyTorch"))
         return loaded
 
     def loaded_model_keys(self) -> list[str]:

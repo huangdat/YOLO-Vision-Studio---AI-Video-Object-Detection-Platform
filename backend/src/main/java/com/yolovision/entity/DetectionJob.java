@@ -83,6 +83,12 @@ public class DetectionJob {
     @Column(name = "processing_mode", nullable = false, length = 32)
     private ProcessingMode processingMode = ProcessingMode.DETECTION_ONLY;
 
+    /** Requested inference precision; FP32 for every job created before precision existed. */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inference_precision", nullable = false, length = 8)
+    private InferencePrecision inferencePrecision = InferencePrecision.FP32;
+
     @Min(0)
     @Max(100)
     @Column(name = "progress", nullable = false)
@@ -188,6 +194,14 @@ public class DetectionJob {
 
     public void setProcessingMode(ProcessingMode processingMode) {
         this.processingMode = processingMode;
+    }
+
+    public InferencePrecision getInferencePrecision() {
+        return inferencePrecision;
+    }
+
+    public void setInferencePrecision(InferencePrecision inferencePrecision) {
+        this.inferencePrecision = inferencePrecision;
     }
 
     public void setStatus(DetectionJobStatus status) {

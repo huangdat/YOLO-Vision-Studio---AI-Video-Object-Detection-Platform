@@ -6,8 +6,8 @@ from unittest.mock import Mock
 import pytest
 
 from app.config.settings import Settings
-from app.core.exceptions import InferenceError, VideoLimitExceededError, VideoProcessingError
-from app.schemas.detection import DetectionBox, DetectionRequest, SourceType
+from app.core.exceptions import InferenceError, ModelLoadingError, VideoLimitExceededError, VideoProcessingError
+from app.schemas.detection import DetectionBox, DetectionRequest, InferencePrecision, InferenceRuntime, SourceType
 from app.services.detection_service import DetectedFrame
 from app.services.video_processor import VideoProcessor
 
@@ -308,3 +308,35 @@ def test_intermediate_exceeding_its_disk_budget_fails_and_is_removed(environment
         context.processor.process(context.source, context.output, context.request)
 
     assert not context.output.exists()
+
+
+# --- Per-job inference precision (Phase 3) -------------------------------------------------------
+
+def test_requested_int8_is_loaded_strictly_and_reported(environment) -> None:
+    context = environment
+    context.loaded.precision, context.loaded.runtime = "int8", "OpenVINO"
+    request = context.request.model_copy(update={"inference_precision": InferencePrecision.INT8})
+
+    result = context.processor.process(context.source, context.output, request)
+
+    assert context.loader.load.call_args.kwargs == {"precision": "int8"}
+    assert (result.effective_precision, result.inference_runtime) == (InferencePrecision.INT8, InferenceRuntime.OPENVINO)
+
+
+def test_requests_without_precision_use_the_configured_default_and_report_fp32(environment) -> None:
+    context = environment  # duck-typed loaded model without precision attributes: legacy PyTorch
+
+    result = context.processor.process(context.source, context.output, context.request)
+
+    assert "precision" not in context.loader.load.call_args.kwargs
+    assert (result.effective_precision, result.inference_runtime) == (InferencePrecision.FP32, InferenceRuntime.PYTORCH)
+
+
+def test_a_model_of_another_precision_is_never_used_for_an_explicit_request(environment) -> None:
+    context = environment  # loader returns FP32 although INT8 is requested
+    request = context.request.model_copy(update={"inference_precision": InferencePrecision.INT8})
+
+    with pytest.raises(ModelLoadingError, match="INT8 was requested but FP32 was loaded"):
+        context.processor.process(context.source, context.output, request)
+
+    context.detection.iter_frames.assert_not_called()

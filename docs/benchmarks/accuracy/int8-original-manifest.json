@@ -1,0 +1,42 @@
+{
+  "manifestVersion": 1,
+  "modelKey": "yolo11n",
+  "format": "openvino-int8",
+  "quantize": 8,
+  "dynamic": true,
+  "imageSize": 960,
+  "source": {
+    "weightsFilename": "yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "sizeBytes": 5613764
+  },
+  "calibration": {
+    "kind": "video-frames",
+    "source": "source.mp4",
+    "images": 300,
+    "frameRange": [
+      0,
+      599
+    ],
+    "stride": 2,
+    "fraction": 1.0
+  },
+  "files": {
+    "metadata.yaml": 1768,
+    "yolo11n.bin": 2676932,
+    "yolo11n.xml": 728414
+  },
+  "validation": {
+    "passed": true,
+    "fakeQuantizeNodes": 101,
+    "boxes": 8,
+    "image": "frame_000000.jpg"
+  },
+  "runtime": {
+    "ultralytics": "8.4.207",
+    "openvino": "2026.4.1",
+    "nncf": "3.4.0",
+    "torch": "2.13.0+cpu"
+  },
+  "createdAt": "2026-11-15T10:54:33+00:00"
+}

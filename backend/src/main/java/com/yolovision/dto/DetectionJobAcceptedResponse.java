@@ -1,6 +1,7 @@
 package com.yolovision.dto;
 
 import com.yolovision.entity.DetectionJobStatus;
+import com.yolovision.entity.InferencePrecision;
 import com.yolovision.entity.ProcessingMode;
 import java.util.UUID;
 
@@ -11,5 +12,11 @@ public record DetectionJobAcceptedResponse(
         int progress,
         String modelKey,
         String message,
-        ProcessingMode processingMode) {
+        ProcessingMode processingMode,
+        InferencePrecision inferencePrecision) {
+
+    public DetectionJobAcceptedResponse(UUID jobId, DetectionJobStatus status, int progress, String modelKey,
+            String message, ProcessingMode processingMode) {
+        this(jobId, status, progress, modelKey, message, processingMode, InferencePrecision.FP32);
+    }
 }
