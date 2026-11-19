@@ -17,6 +17,10 @@ from fastapi.responses import JSONResponse
 from app.services.live_inference import SESSION_ID_PATTERN, LiveError, LiveInferenceService
 
 CLASSES_PATTERN = re.compile(r"^\d{1,2}(,\d{1,2}){0,79}$")
+# A model load (once per session start) waits this long for the slot instead of failing at once:
+# a session started right after another stopped would otherwise hit the old session's last frame.
+# Well below the gateway's load timeout (LIVE_LOAD_TIMEOUT, 60 s by default).
+LOAD_SLOT_WAIT_SECONDS = 10.0
 
 
 def error_response(error: LiveError) -> JSONResponse:
@@ -34,12 +38,23 @@ def create_live_router(service: LiveInferenceService) -> APIRouter:
         async with slots:
             return await anyio.to_thread.run_sync(function, *args)
 
+    async def run_after_wait(function, *args):  # type: ignore[no-untyped-def]
+        # Bounded wait, for session-start loads only. Frames still use run_exclusive and never queue.
+        try:
+            await asyncio.wait_for(slots.acquire(), timeout=LOAD_SLOT_WAIT_SECONDS)
+        except TimeoutError:
+            raise LiveError("WORKER_BUSY", "The live worker is processing another frame.", 429) from None
+        try:
+            return await anyio.to_thread.run_sync(function, *args)
+        finally:
+            slots.release()
+
     @router.post("/models/{model_key}/load")
     async def load_model(model_key: str, image_size: int = Query(default=416, alias="imageSize")) -> JSONResponse:
         try:
             if not 32 <= image_size <= service.settings.live_max_image_size or image_size % 32:
                 raise LiveError("INVALID_PARAMETERS", "imageSize must be a multiple of 32 within the live limit.", 400)
-            loaded = await run_exclusive(service.load_model, model_key, image_size)
+            loaded = await run_after_wait(service.load_model, model_key, image_size)
         except LiveError as error:
             return error_response(error)
         return JSONResponse({"modelKey": loaded.model_key, "device": loaded.device,
