@@ -1,0 +1,6 @@
+# Bootstrap CUDA 12.6 PyTorch (NVIDIA GPUs, compute capability 5.0+) from its official index, then
+# install requirements-ai.txt. Same versions as requirements-ai-cpu.txt; ==2.13.0 in requirements-ai.txt
+# is satisfied by 2.13.0+cu126. Used only by the optional GPU image (TORCH_VARIANT=cu126).
+--index-url https://download.pytorch.org/whl/cu126
+torch==2.13.0
+torchvision==0.28.0

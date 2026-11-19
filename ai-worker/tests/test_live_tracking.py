@@ -151,3 +151,43 @@ def test_a_busy_worker_still_accepts_session_cleanup(cache: Path) -> None:
             pass
         assert client.delete(f"/internal/live/sessions/{SESSION_A}").status_code == 204
     assert session.tracker.closed
+
+
+# --- Tracker input for frontend (browser) ByteTrack ----------------------------------------------
+
+LOW = ((2, 0.87, (120.0, 85.0, 310.0, 260.0)), (0, 0.15, (400.0, 100.0, 460.0, 300.0)))
+
+
+def test_tracking_input_returns_every_box_from_the_low_score_floor_without_track_ids(cache: Path) -> None:
+    service, loader = make_service(cache, FakeModel(boxes=LOW))
+    with client_for(service) as client:
+        body = infer(client, jpeg(), classes="0,2", trackingInput="true", confidence="0.4").json()
+
+    # YOLO runs at ByteTrack's low-score floor, and the 0.15 box below the 0.4 threshold is kept for
+    # the browser's second association stage.
+    assert loader.model.calls[0]["conf"] == pytest.approx(0.1)
+    assert [d["confidence"] for d in body["detections"]] == [0.87, 0.15]
+    assert all("trackId" not in d for d in body["detections"])
+    assert body["trackingInput"] is True and body["lowScoreFloor"] == pytest.approx(0.1)
+    assert "tracking" not in body and "activeTracks" not in body
+    assert body["device"] == "cpu" and body["precision"] == "FP32"
+    assert service.tracking.active() == 0  # no server-side tracking state
+
+
+def test_tracking_input_is_stateless_and_needs_no_session(cache: Path) -> None:
+    service, _ = make_service(cache, FakeModel(boxes=LOW))
+    with client_for(service) as client:
+        later = infer(client, jpeg(), frameId=9, trackingInput="true")
+        earlier = infer(client, jpeg(), frameId=3, trackingInput="true")  # ordering is the browser's job
+
+    assert later.status_code == earlier.status_code == 200
+    assert service.tracking.active() == 0
+
+
+def test_tracking_input_cannot_be_combined_with_server_tracking(cache: Path) -> None:
+    service, _ = make_service(cache, FakeModel(boxes=LOW))
+    with client_for(service) as client:
+        response = track(client, 1, trackingInput="true")
+
+    assert response.status_code == 400
+    assert "cannot be combined" in response.json()["error"]["message"]

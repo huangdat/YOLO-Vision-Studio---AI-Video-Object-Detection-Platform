@@ -101,7 +101,7 @@ def test_valid_jpeg_returns_the_documented_contract_in_frame_pixels(cache: Path)
     assert response.json() == {
         "frameId": 42, "modelKey": "yolo11n", "width": 640, "height": 480,
         "detections": [{"classId": 2, "label": "car", "confidence": 0.87, "box": [120.0, 85.0, 310.0, 260.0]}],
-        "inferenceMs": 42.0,
+        "inferenceMs": 42.0, "device": "cpu", "precision": "FP32",
     }
     call = loader.model.calls[0]
     assert call["conf"] == 0.25 and call["imgsz"] == 416 and call["classes"] == [1, 2, 3, 5, 7]
@@ -323,6 +323,64 @@ def test_a_busy_worker_answers_429_instead_of_queueing(cache: Path) -> None:
     assert second.json()["error"]["code"] == "WORKER_BUSY"
     assert first.status_code == 200
     assert len(loader.model.calls) == 1
+
+
+def test_a_session_start_waits_for_the_previous_sessions_last_frame(cache: Path) -> None:
+    """Stop then Start at once: the new session's model load waits for the in-flight frame, not 429."""
+    gate = threading.Event()
+    service, loader = make_service(cache, FakeModel(gate=gate))
+    app = create_live_app(service=service, settings=service.settings)
+
+    async def scenario():
+        import httpx2 as httpx
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://live") as client:
+            frame = asyncio.create_task(client.post("/internal/live/infer", params={"modelKey": "yolo11n", "frameId": 9},
+                                                    content=jpeg(), headers={"Content-Type": "image/jpeg"}))
+            for _ in range(200):
+                if loader.model.calls:
+                    break
+                await asyncio.sleep(0.01)
+            load = asyncio.create_task(client.post("/internal/live/models/yolo11n/load"))
+            await asyncio.sleep(0.2)
+            assert not load.done()  # waiting for the slot, not rejected
+            gate.set()
+            return await frame, await load
+
+    frame, load = asyncio.run(scenario())
+    assert frame.status_code == 200
+    assert load.status_code == 200
+    assert load.json()["modelKey"] == "yolo11n"
+
+
+def test_a_session_start_still_fails_if_the_worker_stays_busy(cache: Path, monkeypatch) -> None:
+    import app.api.live as live_api
+
+    monkeypatch.setattr(live_api, "LOAD_SLOT_WAIT_SECONDS", 0.2)
+    gate = threading.Event()
+    service, loader = make_service(cache, FakeModel(gate=gate))
+    app = create_live_app(service=service, settings=service.settings)
+
+    async def scenario():
+        import httpx2 as httpx
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://live") as client:
+            frame = asyncio.create_task(client.post("/internal/live/infer", params={"modelKey": "yolo11n", "frameId": 1},
+                                                    content=jpeg(), headers={"Content-Type": "image/jpeg"}))
+            for _ in range(200):
+                if loader.model.calls:
+                    break
+                await asyncio.sleep(0.01)
+            load = await client.post("/internal/live/models/yolo11n/load")
+            gate.set()
+            await frame
+            return load
+
+    load = asyncio.run(scenario())
+    assert load.status_code == 429
+    assert load.json()["error"]["code"] == "WORKER_BUSY"
 
 
 def test_frames_are_never_written_to_disk(cache: Path, tmp_path_factory) -> None:

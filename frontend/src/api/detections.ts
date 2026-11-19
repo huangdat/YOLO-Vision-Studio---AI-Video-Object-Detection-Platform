@@ -58,6 +58,13 @@ function runtime(data: JsonRecord): InferenceRuntime | null {
   return value;
 }
 
+function device(data: JsonRecord): string | null {
+  const value = data.inferenceDevice;
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !/^(cpu|cuda:[0-9]{1,2})$/.test(value)) invalid();
+  return value;
+}
+
 function toTracking(value: unknown): TrackingSummary | null {
   if (value === undefined || value === null) return null;
   const data = record(value);
@@ -145,6 +152,7 @@ function toResult(value: unknown): DetectionResultMetadata {
     tracking: toTracking(data.tracking),
     effectivePrecision: precision(data, "effectivePrecision"),
     inferenceRuntime: runtime(data),
+    inferenceDevice: device(data),
   };
 }
 

@@ -21,10 +21,19 @@ export function requestedPrecisionText(precision: InferencePrecision | null): st
 export function executedPrecisionText(
   effective: InferencePrecision | null,
   runtime: InferenceRuntime | null,
+  inferenceDevice: string | null = null,
 ): string | null {
   if (effective === null) return null;
   const engine = runtime === "OPENVINO" ? "OpenVINO" : runtime === "PYTORCH" ? "PyTorch" : null;
-  return engine ? `${engine} ${effective}` : effective;
+  const text = engine ? `${engine} ${effective}` : effective;
+  const where = deviceLabel(inferenceDevice);
+  return where ? `${text} · ${where}` : text;
+}
+
+/** "GPU (cuda:0)" or "CPU"; null when the device was not reported. */
+export function deviceLabel(inferenceDevice: string | null): string | null {
+  if (!inferenceDevice) return null;
+  return inferenceDevice.startsWith("cuda") ? `GPU (${inferenceDevice})` : "CPU";
 }
 
 /** Extra guidance for failures caused by the precision setting; null for other errors. */

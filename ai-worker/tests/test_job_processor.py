@@ -67,12 +67,13 @@ class FakeStore:
 
 
 class FakePipeline:
-    def __init__(self, settings, error=None, model_key=None, effective_precision="requested"):
+    def __init__(self, settings, error=None, model_key=None, effective_precision="requested", device=None):
         self.settings = settings
         self.error = error
         self.model_key = model_key
         # "requested" echoes the request like the real pipeline does when loading succeeds.
         self.effective_precision = effective_precision
+        self.device = device
         self.requests = []
 
     def process_video(self, request, on_progress=None):
@@ -99,7 +100,7 @@ class FakePipeline:
                 "executionId": "e", "modelKey": self.model_key or request.model_key, "modelVersion": "YOLO11",
                 "processingTimeMs": 7058, "output": {"videoPath": str(video), "metadataPath": "x"},
                 "statistics": {"totalFramesProcessed": 36, "detectionsByClass": {"bus": 36},
-                               "modelKey": request.model_key},
+                               "modelKey": request.model_key, **({"device": self.device} if self.device else {})},
                 "processingMode": request.processing_mode.value,
                 "tracking": {"tracker": "bytetrack", "uniqueTrackIds": 2, "maxActiveTracks": 2,
                              "trackedDetections": 60, "uniqueTrackIdsByClass": {"bus": 2},
@@ -481,3 +482,23 @@ def test_commands_reject_unknown_precisions(environment, value):
     settlement = environment.processor.handle(command_bytes(inferencePrecision=value), 1, sink)
 
     assert settlement.error_code == "INVALID_COMMAND" and environment.pipelines == []
+
+
+def test_completion_reports_the_device_the_model_ran_on(environment):
+    environment.options["device"] = "cuda:0"
+    sink = RecordingSink()
+
+    environment.processor.handle(command_bytes(inferencePrecision="FP32"), 1, sink)
+
+    result = sink.events[-1].result
+    assert (result.inference_device, result.effective_precision) == ("cuda:0", InferencePrecision.FP32)
+    assert json.loads(sink.events[-1].model_dump_json(by_alias=True))["result"]["inferenceDevice"] == "cuda:0"
+
+
+def test_an_unexpected_device_string_is_not_reported(environment):
+    environment.options["device"] = "/dev/nvidia0"
+    sink = RecordingSink()
+
+    environment.processor.handle(command_bytes(inferencePrecision="FP32"), 1, sink)
+
+    assert "COMPLETED" not in sink.statuses()  # rejected as an incomplete manifest, never forwarded

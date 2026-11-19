@@ -295,9 +295,25 @@ def test_int8_is_cpu_only(tmp_path: Path, loader_environment) -> None:
     settings = settings_for(tmp_path, model_precision="int8")
     write_artifact(settings, source=write_weights(settings))
 
-    assert ModelLoader(settings).load("yolo11n", "auto", record_verification=False).precision == "fp32"
+    # "auto" picks the CPU for the OpenVINO INT8 artifact even though a GPU is available...
+    loaded = ModelLoader(settings).load("yolo11n", "auto", record_verification=False)
+    assert (loaded.precision, loaded.device, loaded.predict_device) == ("int8", "cpu", OPENVINO_CPU_DEVICE)
+    # ...while an explicit CUDA request with INT8 is a configuration error, never a silent CPU run.
     with pytest.raises(ModelLoadingError, match="CPU only"):
         ModelLoader(settings).load("yolo11n", "cuda:0", precision="int8")
+
+
+def test_fp32_fallback_from_int8_uses_the_gpu_under_auto(tmp_path: Path, loader_environment) -> None:
+    torch, models = loader_environment
+    torch.cuda.is_available.return_value = True
+    torch.cuda.device_count.return_value = 1
+    settings = settings_for(tmp_path, model_precision="int8")  # fallback enabled, no INT8 artifact
+    write_weights(settings)
+
+    loaded = ModelLoader(settings).load("yolo11n", "auto", record_verification=False)
+
+    assert (loaded.precision, loaded.device) == ("fp32", "cuda:0")
+    models[0].to.assert_called_once_with("cuda:0")
 
 
 def test_openvino_backend_is_recompiled_with_the_configured_thread_count(tmp_path: Path) -> None:

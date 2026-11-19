@@ -243,7 +243,9 @@ function DetailsShell({ title, children }: { title: string; children: ReactNode 
 }
 
 function JobSettings({ job, result }: { job: DetectionJob; result: DetectionResultMetadata | null }) {
-  const executed = result ? executedPrecisionText(result.effectivePrecision, result.inferenceRuntime) : null;
+  const executed = result
+    ? executedPrecisionText(result.effectivePrecision, result.inferenceRuntime, result.inferenceDevice)
+    : null;
   return (
     <section className="card" aria-labelledby="config-title">
       <h2 id="config-title" className="card-title">

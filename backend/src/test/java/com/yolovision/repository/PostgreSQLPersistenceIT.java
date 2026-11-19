@@ -57,8 +57,8 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
 
     @Test
     void productionMigrationsValidateAndRerunningDoesNotReapplySeeds() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("9");
-        assertThat(flyway.info().applied()).hasSize(9);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
+        assertThat(flyway.info().applied()).hasSize(10);
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
@@ -197,6 +197,17 @@ class PostgreSQLPersistenceIT extends AbstractRepositoryPersistenceTests {
                 Boolean.class, legacy.getId())).isTrue();
         assertSqlState(() -> jdbc.update(
                 "UPDATE detection_results SET effective_precision = 'FP16' WHERE id = ?", legacy.getId()), "23514");
+    }
+
+    @Test
+    void inferenceDevicesAreStoredAndUnknownOnesRejected() {
+        DetectionResult result = new DetectionResult(persistedJob(), "results/gpu.mp4", Map.of());
+        result.setInferenceDevice("cuda:0");
+        results.saveAndFlush(result);
+        assertThat(jdbc.queryForObject("SELECT inference_device FROM detection_results WHERE id = ?", String.class,
+                result.getId())).isEqualTo("cuda:0");
+        assertSqlState(() -> jdbc.update(
+                "UPDATE detection_results SET inference_device = 'tpu:0' WHERE id = ?", result.getId()), "23514");
     }
 
     @Test

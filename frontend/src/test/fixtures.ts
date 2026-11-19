@@ -95,6 +95,7 @@ export function result(overrides: Partial<DetectionResultMetadata> = {}): Detect
     tracking: null,
     effectivePrecision: "FP32",
     inferenceRuntime: "PYTORCH",
+    inferenceDevice: "cpu",
     ...overrides,
   };
 }

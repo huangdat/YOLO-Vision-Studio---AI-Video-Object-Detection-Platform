@@ -15,6 +15,9 @@ export const LIVE_JPEG_QUALITY = 0.7;
 export const LIVE_TARGET_FPS = 5;
 export const MAX_FRAME_ID = 0xffffffff;
 
+/** Where ByteTrack runs: CLIENT = the browser's Web Worker, SERVER = the live worker (legacy). */
+export type LiveTrackingMode = "CLIENT" | "SERVER";
+
 export interface LiveStartRequest {
   type: "start";
   version: number;
@@ -22,8 +25,10 @@ export interface LiveStartRequest {
   confidence: number;
   imageSize: number;
   classes: number[];
-  /** Ask the server to run ByteTrack for this session (optional; default false). */
+  /** Enable tracking for this session (optional; default false). */
   tracking: boolean;
+  /** Where tracking runs; omitted means SERVER for compatibility. */
+  trackingMode?: LiveTrackingMode;
 }
 
 export interface LiveDetection {
@@ -43,8 +48,10 @@ export interface LiveReady {
   maxFps: number;
   maxFrameBytes: number;
   maxInFlight: number;
-  /** True when the server runs ByteTrack for this session. */
+  /** True when tracking is enabled for this session. */
   tracking: boolean;
+  /** Where ByteTrack runs; null without tracking (or from servers that predate the field: SERVER). */
+  trackingMode: LiveTrackingMode | null;
 }
 
 export interface LiveDetections {
@@ -58,6 +65,12 @@ export interface LiveDetections {
   tracking: boolean;
   /** Tracks the worker reported as active in this frame; null in Detection Only sessions. */
   activeTracks: number | null;
+  /** CLIENT: tracker input (no Track IDs, includes boxes from lowScoreFloor up). */
+  trackingMode: LiveTrackingMode | null;
+  lowScoreFloor: number | null;
+  /** Device and precision the worker actually ran, when reported ("cuda:0", "cpu"; "FP32", "INT8"). */
+  device: string | null;
+  precision: string | null;
 }
 
 export interface LiveDropped {
@@ -122,7 +135,8 @@ export function parseLiveMessage(raw: string): LiveServerMessage | null {
       return isString(data.sessionId) && isString(data.modelKey) && isNumber(data.maxFps) &&
         isNumber(data.maxFrameBytes) && isNumber(data.maxInFlight)
         ? { type: "ready", sessionId: data.sessionId, modelKey: data.modelKey, maxFps: data.maxFps,
-            maxFrameBytes: data.maxFrameBytes, maxInFlight: data.maxInFlight, tracking: data.tracking === true }
+            maxFrameBytes: data.maxFrameBytes, maxInFlight: data.maxInFlight, tracking: data.tracking === true,
+            trackingMode: data.tracking === true ? (data.trackingMode === "CLIENT" ? "CLIENT" : "SERVER") : null }
         : null;
     case "detections": {
       if (!isNumber(data.frameId) || !isNumber(data.width) || !isNumber(data.height) ||
@@ -135,7 +149,11 @@ export function parseLiveMessage(raw: string): LiveServerMessage | null {
         detections: detections as LiveDetection[], inferenceMs: data.inferenceMs,
         serverMs: isNumber(data.serverMs) ? data.serverMs : 0,
         tracking: data.tracking === true,
-        activeTracks: data.tracking === true && isNumber(data.activeTracks) ? data.activeTracks : null };
+        activeTracks: data.tracking === true && isNumber(data.activeTracks) ? data.activeTracks : null,
+        trackingMode: data.trackingMode === "CLIENT" ? "CLIENT" : data.tracking === true ? "SERVER" : null,
+        lowScoreFloor: isNumber(data.lowScoreFloor) ? data.lowScoreFloor : null,
+        device: isString(data.device) && /^(cpu|cuda:[0-9]{1,2})$/.test(data.device) ? data.device : null,
+        precision: data.precision === "FP32" || data.precision === "INT8" ? data.precision : null };
     }
     case "dropped":
       return isNumber(data.frameId) && (data.reason === "BUSY" || data.reason === "RATE_LIMITED")

@@ -52,7 +52,7 @@ public class DetectionResultQueryService {
                         tracking.tracker(), tracking.uniqueTrackIds(), tracking.maxActiveTracks(),
                         tracking.trackedDetections(), tracking.uniqueTrackIdsByClass(),
                         DetectionResultMetadataResponse.TRACK_IDS),
-                result.getEffectivePrecision(), result.getInferenceRuntime());
+                result.getEffectivePrecision(), result.getInferenceRuntime(), result.getInferenceDevice());
     }
 
     private static boolean hasText(String value) {

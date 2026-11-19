@@ -76,6 +76,10 @@ public class DetectionResult {
     @Column(name = "inference_runtime", length = 16)
     private InferenceRuntime inferenceRuntime;
 
+    /** Device the worker actually ran the model on ("cpu", "cuda:0"); null when not reported. */
+    @Column(name = "inference_device", length = 16)
+    private String inferenceDevice;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -119,6 +123,14 @@ public class DetectionResult {
 
     public void setInferenceRuntime(InferenceRuntime inferenceRuntime) {
         this.inferenceRuntime = inferenceRuntime;
+    }
+
+    public String getInferenceDevice() {
+        return inferenceDevice;
+    }
+
+    public void setInferenceDevice(String inferenceDevice) {
+        this.inferenceDevice = inferenceDevice;
     }
 
     public DetectionJob getJob() {

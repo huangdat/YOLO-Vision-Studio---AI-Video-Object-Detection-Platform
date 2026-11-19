@@ -109,7 +109,7 @@ class DetectionJobEventConsumerTest {
                  "timestamp":"2026-11-08T00:00:00Z","modelKey":"yolo11n",
                  "result":{"outputVideoKey":"detections/%s/detected.mp4","resultJsonKey":"detections/%s/result.json",
                  "totalFrames":150,"processingTimeMs":45000,"detectionSummary":{"car":120},
-                 "effectivePrecision":"INT8","inferenceRuntime":"OPENVINO"}}"""
+                 "effectivePrecision":"INT8","inferenceRuntime":"OPENVINO","inferenceDevice":"cpu"}}"""
                 .formatted(EVENT, JOB, JOB, JOB)));
 
         ArgumentCaptor<DetectionEventMessage> captor = ArgumentCaptor.forClass(DetectionEventMessage.class);
@@ -117,6 +117,7 @@ class DetectionJobEventConsumerTest {
         DetectionEventMessage.Result result = captor.getValue().result();
         assertThat(result.effectivePrecision()).isEqualTo(InferencePrecision.INT8);
         assertThat(result.inferenceRuntime()).isEqualTo(InferenceRuntime.OPENVINO);
+        assertThat(result.inferenceDevice()).isEqualTo("cpu");
     }
 
     @ParameterizedTest

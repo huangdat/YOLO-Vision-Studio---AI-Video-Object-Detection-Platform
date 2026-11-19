@@ -88,6 +88,8 @@ class EventResult(EngineSchema):
     tracking: EventTracking | None = None
     effective_precision: InferencePrecision | None = None
     inference_runtime: InferenceRuntime | None = None
+    # Device the model actually ran on ("cpu", "cuda:0"); distinct from precision and runtime.
+    inference_device: str | None = Field(default=None, pattern=r"^(cpu|cuda:[0-9]{1,2})$")
 
 
 class EventError(EngineSchema):

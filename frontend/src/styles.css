@@ -2211,3 +2211,29 @@ fieldset:disabled .class-option {
 .live-track-count {
   color: var(--primary-text);
 }
+
+/* Live Detection: where tracking runs ------------------------------------------------------- */
+.live-tracking-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.live-tracking-mode legend {
+  padding: 0 4px;
+  font-weight: 600;
+  color: var(--text);
+}
+.live-tracking-mode label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.live-tracking-mode input {
+  accent-color: var(--primary);
+}

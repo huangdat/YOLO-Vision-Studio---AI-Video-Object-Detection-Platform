@@ -1,0 +1,31 @@
+# Optional NVIDIA GPU acceleration for YOLO inference (detection consumer and live worker).
+#   docker compose -f compose.yaml -f compose.gpu.yaml up -d --build
+# Requires an NVIDIA GPU, its driver on the host, and Docker GPU support (Docker Desktop with WSL2, or
+# the NVIDIA Container Toolkit on Linux). Without this overlay nothing changes: images stay CPU-only.
+# AI_DEVICE=auto (default) uses cuda:0 when PyTorch sees it and the CPU otherwise; the effective device
+# is logged and reported with each result. OpenVINO INT8 jobs always run on the CPU.
+x-gpu-build: &gpu-build
+  context: ./ai-worker
+  args:
+    TORCH_VARIANT: cu126
+    INSTALL_OPENVINO: ${AI_WORKER_INSTALL_OPENVINO:-false}
+
+x-gpu-devices: &gpu-devices
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: 1
+          capabilities: [gpu]
+
+services:
+  ai-worker:
+    build: *gpu-build
+  ai-detection-consumer:
+    build: *gpu-build
+    deploy: *gpu-devices
+  ai-live-worker:
+    build: *gpu-build
+    deploy: *gpu-devices
+    # The CUDA runtime needs more host memory than the CPU build.
+    mem_limit: ${LIVE_WORKER_GPU_MEMORY_LIMIT:-4g}

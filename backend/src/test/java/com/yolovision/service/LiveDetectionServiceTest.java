@@ -79,6 +79,7 @@ class LiveDetectionServiceTest {
         final List<List<Integer>> classes = new ArrayList<>();
         final List<String> trackingSessions = new ArrayList<>();
         final List<String> endedSessions = new CopyOnWriteArrayList<>();
+        final List<Boolean> trackingInputs = new ArrayList<>();
         String lastConfidence;
 
         @Override
@@ -99,6 +100,13 @@ class LiveDetectionServiceTest {
         }
 
         @Override
+        public CompletableFuture<WorkerResult> infer(byte[] jpeg, long frameId, String modelKey, String confidence,
+                int imageSize, List<Integer> classes, String trackingSessionId, boolean trackingInput) {
+            trackingInputs.add(trackingInput);
+            return infer(jpeg, frameId, modelKey, confidence, imageSize, classes, trackingSessionId);
+        }
+
+        @Override
         public CompletableFuture<Void> endTrackingSession(String trackingSessionId) {
             endedSessions.add(trackingSessionId);
             return CompletableFuture.completedFuture(null);
@@ -107,6 +115,13 @@ class LiveDetectionServiceTest {
         void answer(int index, long frameId) {
             calls.get(index).complete(new WorkerResult(frameId, "yolo11n", 640, 480,
                     List.of(new Detection(2, "car", 0.87, List.of(120.0, 85.0, 310.0, 260.0))), 85.0));
+        }
+
+        void answerTrackingInput(int index, long frameId) {
+            calls.get(index).complete(new WorkerResult(frameId, "yolo11n", 640, 480, List.of(
+                    new Detection(2, "car", 0.87, List.of(120.0, 85.0, 310.0, 260.0)),
+                    new Detection(0, "person", 0.15, List.of(10.0, 20.0, 30.0, 90.0))), 31.5, null, null, true, 0.1,
+                    "cuda:0", "FP32"));
         }
 
         void answerTracked(int index, long frameId) {
@@ -416,6 +431,71 @@ class LiveDetectionServiceTest {
 
         assertThat(worker.endedSessions).containsExactly(sessionId);
         assertThat(service.activeSessions()).isZero();
+    }
+
+    @Test
+    void clientTrackingSessionsAskForTrackerInputAndKeepNoWorkerState() throws Exception {
+        FakeConnection connection = connect("a");
+        service.text(connection, "{\"type\":\"start\",\"version\":1,\"modelKey\":\"yolo11n\",\"confidence\":0.4,"
+                + "\"tracking\":true,\"trackingMode\":\"CLIENT\"}");
+        JsonNode ready = last(connection);
+        service.binary(connection, frame(1, 10));
+        worker.answerTrackingInput(0, 1);
+
+        assertThat(ready.path("tracking").asBoolean()).isTrue();
+        assertThat(ready.path("tracker").asText()).isEqualTo("bytetrack");
+        assertThat(ready.path("trackingMode").asText()).isEqualTo("CLIENT");
+        assertThat(worker.trackingInputs).containsExactly(true);
+        assertThat(worker.trackingSessions).containsOnlyNulls(); // no server-side tracking session
+        JsonNode result = last(connection);
+        assertThat(result.path("trackingMode").asText()).isEqualTo("CLIENT");
+        assertThat(result.path("lowScoreFloor").asDouble()).isEqualTo(0.1);
+        assertThat(result.path("device").asText()).isEqualTo("cuda:0");
+        assertThat(result.path("precision").asText()).isEqualTo("FP32");
+        assertThat(result.has("tracking")).isFalse();
+        assertThat(result.path("detections")).hasSize(2); // the 0.15 box is kept for ByteTrack's second stage
+        assertThat(result.path("detections").get(0).has("trackId")).isFalse();
+
+        service.text(connection, "{\"type\":\"stop\"}");
+        assertThat(worker.endedSessions).isEmpty(); // nothing to release in the worker
+    }
+
+    @Test
+    void trackingWithoutAModeStaysOnTheServer() throws Exception {
+        FakeConnection connection = startedWithTracking("a");
+        JsonNode ready = last(connection);
+        service.binary(connection, frame(1, 10));
+
+        assertThat(ready.path("trackingMode").asText()).isEqualTo("SERVER");
+        assertThat(worker.trackingInputs).containsExactly(false);
+        assertThat(worker.trackingSessions).containsExactly(ready.path("sessionId").asText());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "\"trackingMode\":\"BROWSER\"",
+        "\"trackingMode\":\"client\"",
+        "\"tracking\":false,\"trackingMode\":\"CLIENT\""})
+    void invalidTrackingModesAreFieldErrors(String fields) throws Exception {
+        FakeConnection connection = connect("a");
+        service.text(connection, "{\"type\":\"start\",\"version\":1,\"modelKey\":\"yolo11n\"," + fields + "}");
+
+        JsonNode error = last(connection);
+        assertThat(error.path("code").asText()).isEqualTo("INVALID_SETTINGS");
+        assertThat(error.path("errors").path("trackingMode").asText()).isNotEmpty();
+        assertThat(worker.calls).isEmpty();
+    }
+
+    @Test
+    void detectionOnlyMessagesCarryTheWorkersExecutionDetailsWhenReported() throws Exception {
+        FakeConnection connection = started("a");
+        service.binary(connection, frame(1, 10));
+        worker.answer(0, 1); // a worker that does not report device or precision
+
+        JsonNode result = last(connection);
+        assertThat(result.has("device")).isFalse();
+        assertThat(result.has("trackingMode")).isFalse();
+        assertThat(result.has("tracking")).isFalse();
     }
 
     @Test

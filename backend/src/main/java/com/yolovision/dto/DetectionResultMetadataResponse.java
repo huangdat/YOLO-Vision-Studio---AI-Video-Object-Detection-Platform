@@ -12,8 +12,8 @@ import java.util.UUID;
  * Result metadata of a COMPLETED job. Counts are bounding-box detections summed over all
  * processed frames (countSemantics), not unique objects. Storage locations are not exposed;
  * the artifacts themselves are served by DetectionArtifactController (Phase 09).
- * {@code effectivePrecision} and {@code inferenceRuntime} are what the worker actually ran; both are
- * null for results stored before workers reported them.
+ * {@code effectivePrecision}, {@code inferenceRuntime} and {@code inferenceDevice} ("cpu", "cuda:0")
+ * are what the worker actually ran; they are null for results stored before workers reported them.
  */
 public record DetectionResultMetadataResponse(
         UUID jobId,
@@ -32,7 +32,8 @@ public record DetectionResultMetadataResponse(
         ProcessingMode processingMode,
         Tracking tracking,
         InferencePrecision effectivePrecision,
-        InferenceRuntime inferenceRuntime) {
+        InferenceRuntime inferenceRuntime,
+        String inferenceDevice) {
 
     public static final String FRAME_DETECTIONS = "BOUNDING_BOX_DETECTIONS_ACROSS_FRAMES";
     public static final String TRACK_IDS = "TRACK_IDS_ASSIGNED_BY_BYTETRACK";
@@ -48,7 +49,7 @@ public record DetectionResultMetadataResponse(
             Tracking tracking) {
         this(jobId, status, modelKey, modelVersion, totalFrames, totalDetections, processingTimeMs, detectionSummary,
                 countSemantics, outputVideoAvailable, resultMetadataAvailable, createdAt, completedAt, processingMode,
-                tracking, null, null);
+                tracking, null, null, null);
     }
 
     /**
