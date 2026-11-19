@@ -38,9 +38,13 @@ FROM runtime AS cpu
 # The GPU build is several GB larger; it is only used with compose.gpu.yaml.
 ARG TORCH_VARIANT=cpu
 COPY requirements-ai-cpu.txt requirements-ai-cu126.txt requirements-ai.txt ./
-# The CUDA wheels are several hundred MB each: tolerate slow or stalled downloads.
-RUN case "$TORCH_VARIANT" in cpu|cu126) ;; *) echo "TORCH_VARIANT must be cpu or cu126" >&2; exit 1;; esac \
-    && PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=10 pip install --no-cache-dir -r "requirements-ai-${TORCH_VARIANT}.txt" \
+# The CUDA wheels are several hundred MB each: tolerate slow or stalled downloads, and keep finished
+# downloads in a BuildKit cache mount (never in the image), so an interrupted build resumes instead of
+# downloading everything again.
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    case "$TORCH_VARIANT" in cpu|cu126) ;; *) echo "TORCH_VARIANT must be cpu or cu126" >&2; exit 1;; esac \
+    && env -u PIP_NO_CACHE_DIR PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=10 \
+        pip install --cache-dir /root/.cache/pip -r "requirements-ai-${TORCH_VARIANT}.txt" \
     && pip install --no-cache-dir -r requirements-ai.txt \
     && pip check
 # Optional OpenVINO INT8 runtime (docs/quantization-phase2.md). Off by default, so the default image
